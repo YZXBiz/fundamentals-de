@@ -1,582 +1,1825 @@
 ---
 sidebar_position: 6
-title: Chapter 5 - Data Generation in Source Systems
-description: Understanding source systems, data generation patterns, and how data engineers interact with the first stage of the data engineering lifecycle.
+title: "Chapter 5: Data Generation in Source Systems"
+description: "Understanding source systems, data generation patterns, databases, APIs, and how data engineers interact with the first stage of the data engineering lifecycle"
 ---
 
-# Chapter 5. Data Generation in Source Systems
+import {
+  Box, Arrow, Row, Column, Group,
+  DiagramContainer, ProcessFlow, TreeDiagram,
+  CardGrid, StackDiagram, ComparisonTable,
+  colors
+} from '@site/src/components/diagrams';
 
-Welcome to the first stage of the data engineering lifecycle: data generation in source systems. As we described earlier, the job of a data engineer is to take data from source systems, do something with it, and make it helpful in serving downstream use cases. But before you get raw data, you must understand where the data exists, how it is generated, and its characteristics and quirks.
+# Chapter 5: Data Generation in Source Systems
 
-This chapter covers some popular operational source system patterns and the significant types of source systems. Many source systems exist for data generation, and we're not exhaustively covering them all. We'll consider the data these systems generate and things you should consider when working with source systems. We also discuss how the undercurrents of data engineering apply to this first phase of the data engineering lifecycle.
+> **"Get familiar with your source system and how it generates data. Put in the effort to read the source system documentation and understand its patterns and quirks."**
+>
+> — Fundamentals of Data Engineering
 
-As data proliferates, especially with the rise of data sharing, we expect that a data engineer's role will shift heavily toward understanding the interplay between data sources and destinations. The basic plumbing tasks of data engineering—moving data from A to B—will simplify dramatically. On the other hand, it will remain critical to understand the nature of data as it's created in source systems.
+---
 
 ## Table of Contents
 
-1. [Sources of Data: How Is Data Created?](#sources-of-data-how-is-data-created)
-2. [Source Systems: Main Ideas](#source-systems-main-ideas)
-   - Files and Unstructured Data
-   - APIs
-   - Application Databases (OLTP Systems)
-   - Online Analytical Processing System
-   - Change Data Capture
-   - Logs
-   - Database Logs
-   - CRUD
-   - Insert-Only
-   - Messages and Streams
-   - Types of Time
-3. [Source System Practical Details](#source-system-practical-details)
-   - Databases
-   - APIs
-   - Data Sharing
-   - Third-Party Data Sources
-   - Message Queues and Event-Streaming Platforms
-4. [Whom You'll Work With](#whom-youll-work-with)
-5. [Undercurrents and Their Impact on Source Systems](#undercurrents-and-their-impact-on-source-systems)
-6. [Conclusion](#conclusion)
-7. [Additional Resources](#additional-resources)
-
-## Sources of Data: How Is Data Created?
-
-As you learn about the various underlying operational patterns of the systems that generate data, it's essential to understand how data is created. Data is an unorganized, context-less collection of facts and figures. It can be created in many ways, both analog and digital.
-
-Analog data creation occurs in the real world, such as vocal speech, sign language, writing on paper, or playing an instrument. This analog data is often transient; how often have you had a verbal conversation whose contents are lost to the ether after the conversation ends?
-
-Digital data is either created by converting analog data to digital form or is the native product of a digital system. An example of analog to digital is a mobile texting app that converts analog speech into digital text. An example of digital data creation is a credit card transaction on an ecommerce platform. A customer places an order, the transaction is charged to their credit card, and the information for the transaction is saved to various databases.
-
-We'll utilize a few common examples in this chapter, such as data created when interacting with a website or mobile application. But in truth, data is everywhere in the world around us. We capture data from IoT devices, credit card terminals, telescope sensors, stock trades, and more.
-
-Get familiar with your source system and how it generates data. Put in the effort to read the source system documentation and understand its patterns and quirks. If your source system is an RDBMS, learn how it operates (writes, commits, queries, etc.); learn the ins and outs of the source system that might affect your ability to ingest from it.
-
-## Source Systems: Main Ideas
-
-Source systems produce data in various ways. This section discusses the main ideas you'll frequently encounter as you work with source systems.
-
-### Files and Unstructured Data
-
-A file is a sequence of bytes, typically stored on a disk. Applications often write data to files. Files may store local parameters, events, logs, images, and audio.
-
-In addition, files are a universal medium of data exchange. As much as data engineers wish that they could get data programmatically, much of the world still sends and receives files. For example, if you're getting data from a government agency, there's an excellent chance you'll download the data as an Excel or CSV file or receive the file in an email.
-
-The main types of source file formats you'll run into as a data engineer—files that originate either manually or as an output from a source system process—are Excel, CSV, TXT, JSON, and XML. These files have their quirks and can be structured (Excel, CSV), semistructured (JSON, XML, CSV), or unstructured (TXT, CSV). Although you'll use certain formats heavily as a data engineer (such as Parquet, ORC, and Avro), we'll cover these later and put the spotlight here on source system files. Chapter 6 covers the technical details of files.
-
-### APIs
-
-Application programming interfaces (APIs) are a standard way of exchanging data between systems. In theory, APIs simplify the data ingestion task for data engineers. In practice, many APIs still expose a good deal of data complexity for engineers to manage. Even with the rise of various services and frameworks, and services for automating API data ingestion, data engineers must often invest a good deal of energy into maintaining custom API connections. We discuss APIs in greater detail later in this chapter.
-
-### Application Databases (OLTP Systems)
-
-An application database stores the state of an application. A standard example is a database that stores account balances for bank accounts. As customer transactions and payments happen, the application updates bank account balances.
-
-Typically, an application database is an online transaction processing (OLTP) system—a database that reads and writes individual data records at a high rate. OLTP systems are often referred to as transactional databases, but this does not necessarily imply that the system in question supports atomic transactions.
-
-More generally, OLTP databases support low latency and high concurrency. An RDBMS database can select or update a row in less than a millisecond (not accounting for network latency) and handle thousands of reads and writes per second. A document database cluster can manage even higher document commit rates at the expense of potential inconsistency. Some graph databases can also handle transactional use cases.
-
-Fundamentally, OLTP databases work well as application backends when thousands or even millions of users might be interacting with the application simultaneously, updating and writing data concurrently. OLTP systems are less suited to use cases driven by analytics at scale, where a single query must scan a vast amount of data.
-
-#### ACID
-
-Support for atomic transactions is one of a critical set of database characteristics known together as ACID (as you may recall from Chapter 3, this stands for atomicity, consistency, isolation, durability). Consistency means that any database read will return the last written version of the retrieved item. Isolation entails that if two updates are in flight concurrently for the same thing, the end database state will be consistent with the sequential execution of these updates in the order they were submitted. Durability indicates that committed data will never be lost, even in the event of power loss.
-
-Note that ACID characteristics are not required to support application backends, and relaxing these constraints can be a considerable boon to performance and scale. However, ACID characteristics guarantee that the database will maintain a consistent picture of the world, dramatically simplifying the app developer's task.
-
-All engineers (data or otherwise) must understand operating with and without ACID. For instance, to improve performance, some distributed databases use relaxed consistency constraints, such as eventual consistency, to improve performance. Understanding the consistency model you're working with helps you prevent disasters.
-
-#### Atomic transactions
-
-An atomic transaction is a set of several changes that are committed as a unit. In a traditional banking application running on an RDBMS, a SQL statement checks two account balances, one in Account A (the source) and another in Account B (the destination). Money is then moved from Account A to Account B if sufficient funds are in Account A. The entire transaction should run with updates to both account balances or fail without updating either account balance. That is, the whole operation should happen as a transaction.
-
-#### OLTP and analytics
-
-Often, small companies run analytics directly on an OLTP. This pattern works in the short term but is ultimately not scalable. At some point, running analytical queries on OLTP runs into performance issues due to structural limitations of OLTP or resource contention with competing transactional workloads. Data engineers must understand the inner workings of OLTP and application backends to set up appropriate integrations with analytics systems without degrading production application performance.
-
-As companies offer more analytics capabilities in SaaS applications, the need for hybrid capabilities—quick updates with combined analytics capabilities—has created new challenges for data engineers. We'll use the term data application to refer to applications that hybridize transactional and analytics workloads.
-
-### Online Analytical Processing System
-
-In contrast to an OLTP system, an online analytical processing (OLAP) system is built to run large analytics queries and is typically inefficient at handling lookups of individual records. For example, modern column databases are optimized to scan large volumes of data, dispensing with indexes to improve scalability and scan performance. Any query typically involves scanning a minimal data block, often 100 MB or more in size. Trying to look up thousands of individual items per second in such a system will bring it to its knees unless it is combined with a caching layer designed for this use case.
-
-Note that we're using the term OLAP to refer to any database system that supports high-scale interactive analytics queries; we are not limiting ourselves to systems that support OLAP cubes (multidimensional arrays of data). The online part of OLAP implies that the system constantly listens for incoming queries, making OLAP systems suitable for interactive analytics.
-
-Although this chapter covers source systems, OLAPs are typically storage and query systems for analytics. Why are we talking about them in our chapter on source systems? In practical use cases, engineers often need to read data from an OLAP system. For example, a data warehouse might serve data used to train an ML model. Or, an OLAP system might serve a reverse ETL workflow, where derived data in an analytics system is sent back to a source system, such as a CRM, SaaS platform, or transactional application.
-
-### Change Data Capture
-
-Change data capture (CDC) is a method for extracting each change event (insert, update, delete) that occurs in a database. CDC is frequently leveraged to replicate between databases in near real time or create an event stream for downstream processing.
-
-CDC is handled differently depending on the database technology. Relational databases often generate an event log stored directly on the database server that can be processed to create a stream. Many cloud NoSQL databases can send a log or event stream to a target storage location.
-
-### Logs
-
-A log captures information about events that occur in systems. For example, a log may capture traffic and usage patterns on a web server. Your desktop computer's operating system (Windows, macOS, Linux) logs events as the system boots and when applications start or crash, for example.
-
-Logs are a rich data source, potentially valuable for downstream data analysis, ML, and automation. Here are a few familiar sources of logs:
-
-- Operating systems
-- Applications
-- Servers
-- Containers
-- Networks
-- IoT devices
-
-All logs track events and event metadata. At a minimum, a log should capture who, what, and when:
-
-**Who**
-The human, system, or service account associated with the event (e.g., a web browser user agent or a user ID)
-
-**What happened**
-The event and related metadata
-
-**When**
-The timestamp of the event
-
-#### Log encoding
-
-Logs are encoded in a few ways:
-
-**Binary-encoded logs**
-These encode data in a custom compact format for space efficiency and fast I/O. Database logs are a standard example.
-
-**Semistructured logs**
-These are encoded as text in an object serialization format (JSON, more often than not). Semistructured logs are machine-readable and portable. However, they are much less efficient than binary logs. And though they are nominally machine-readable, extracting value from them often requires significant custom code.
-
-**Plain-text (unstructured) logs**
-These essentially store the console output from software. As such, no general-purpose standards exist. These logs can provide helpful information for data scientists and ML engineers, though extracting useful information from the raw text data might be complicated.
-
-#### Log resolution
-
-Logs are created at various resolutions and log levels. The log resolution refers to the amount of event data captured in a log. For example, database logs capture enough information from database events to allow reconstructing the database state at any point in time.
-
-On the other hand, capturing all data changes in logs for a big data system often isn't practical. Instead, these logs may note only that a particular type of commit event has occurred. The log level refers to the conditions required to record a log entry, specifically concerning errors and debugging. Software is often configurable to log every event or to log only errors, for example.
-
-#### Log latency: Batch or real time
-
-Batch logs are often written continuously to a file. Individual log entries can be written to a messaging system such as Kafka or Pulsar for real-time applications.
-
-### Database Logs
-
-Database logs are essential enough that they deserve more detailed coverage. Write-ahead logs—typically, binary files stored in a specific database-native format—play a crucial role in database guarantees and recoverability. The database server receives write and update requests to a database table, storing each operation in the log before acknowledging the request. The acknowledgment comes with a log-associated guarantee: even if the server fails, it can recover its state on reboot by completing the unfinished work from the logs.
-
-Database logs are extremely useful in data engineering, especially for CDC to generate event streams from database changes.
-
-### CRUD
-
-CRUD, which stands for create, read, update, and delete, is a transactional pattern commonly used in programming and represents the four basic operations of persistent storage. CRUD is the most common pattern for storing application state in a database. A basic tenet of CRUD is that data must be created before being used. After the data has been created, the data can be read and updated. Finally, the data may need to be destroyed. CRUD guarantees these four operations will occur on data, regardless of its storage.
-
-CRUD is a widely used pattern in software applications, and you'll commonly find CRUD used in APIs and databases. For example, a web application will make heavy use of CRUD for RESTful HTTP requests and storing and retrieving data from a database.
-
-As with any database, we can use snapshot-based extraction to get data from a database where our application applies CRUD operations. On the other hand, event extraction with CDC gives us a complete history of operations and potentially allows for near real-time analytics.
-
-### Insert-Only
-
-The insert-only pattern retains history directly in a table containing data. Rather than updating records, new records get inserted with a timestamp indicating when they were created. For example, suppose you have a table of customer addresses. Following a CRUD pattern, you would simply update the record if the customer changed their address. With the insert-only pattern, a new address record is inserted with the same customer ID. To read the current customer address by customer ID, you would look up the latest record under that ID.
-
-In a sense, the insert-only pattern maintains a database log directly in the table itself, making it especially useful if the application needs access to history. For example, the insert-only pattern would work well for a banking application designed to present customer address history.
-
-A separate analytics insert-only pattern is often used with regular CRUD application tables. In the insert-only ETL pattern, data pipelines insert a new record in the target analytics table anytime an update occurs in the CRUD table.
-
-Insert-only has a couple of disadvantages. First, tables can grow quite large, especially if data frequently changes, since each change is inserted into the table. Sometimes records are purged based on a record sunset date or a maximum number of record versions to keep table size reasonable. The second disadvantage is that record lookups incur extra overhead because looking up the current state involves running MAX(created_timestamp). If hundreds or thousands of records are under a single ID, this lookup operation is expensive to run.
-
-### Messages and Streams
-
-Related to event-driven architecture, two terms that you'll often see used interchangeably are message queue and streaming platform, but a subtle but essential difference exists between the two. Defining and contrasting these terms is worthwhile since they encompass many big ideas related to source systems and practices and technologies spanning the entire data engineering lifecycle.
-
-A message is raw data communicated across two or more systems. For example, we have System 1 and System 2, where System 1 sends a message to System 2. These systems could be different microservices, a server sending a message to a serverless function, etc. A message is typically sent through a message queue from a publisher to a consumer, and once the message is delivered, it is removed from the queue.
-
-Messages are discrete and singular signals in an event-driven system. For example, an IoT device might send a message with the latest temperature reading to a message queue. This message is then ingested by a service that determines whether the furnace should be turned on or off. This service sends a message to a furnace controller that takes the appropriate action. Once the message is received, and the action is taken, the message is removed from the message queue.
-
-By contrast, a stream is an append-only log of event records. (Streams are ingested and stored in event-streaming platforms.) As events occur, they are accumulated in an ordered sequence; a timestamp or an ID might order events. (Note that events aren't always delivered in exact order because of the subtleties of distributed systems.)
-
-You'll use streams when you care about what happened over many events. Because of the append-only nature of streams, records in a stream are persisted over a long retention window—often weeks or months—allowing for complex operations on records such as aggregations on multiple records or the ability to rewind to a point in time within the stream.
-
-It's worth noting that systems that process streams can process messages, and streaming platforms are frequently used for message passing. We often accumulate messages in streams when we want to perform message analytics. In our IoT example, the temperature readings that trigger the furnace to turn on or off might also be later analyzed to determine temperature trends and statistics.
-
-### Types of Time
-
-While time is an essential consideration for all data ingestion, it becomes that much more critical and subtle in the context of streaming, where we view data as continuous and expect to consume it shortly after it is produced. Let's look at the key types of time you'll run into when ingesting data: the time that the event is generated, when it's ingested and processed, and how long processing took.
-
-Event time indicates when an event is generated in a source system, including the timestamp of the original event itself. An undetermined time lag will occur upon event creation, before the event is ingested and processed downstream. Always include timestamps for each phase through which an event travels. Log events as they occur and at each stage of time—when they're created, ingested, and processed. Use these timestamp logs to accurately track the movement of your data through your data pipelines.
-
-After data is created, it is ingested somewhere. Ingestion time indicates when an event is ingested from source systems into a message queue, cache, memory, object storage, a database, or any place else that data is stored (see Chapter 6). After ingestion, data may be processed immediately; or within minutes, hours, or days; or simply persist in storage indefinitely.
-
-Process time occurs after ingestion time, when the data is processed (typically, a transformation). Processing time is how long the data took to process, measured in seconds, minutes, hours, etc.
-
-You'll want to record these various times, preferably in an automated way. Set up monitoring along your data workflows to capture when events occur, when they're ingested and processed, and how long it took to process events.
-
-## Source System Practical Details
-
-This section discusses the practical details of interacting with modern source systems. We'll dig into the details of commonly encountered databases, APIs, and other aspects. This information will have a shorter shelf life than the main ideas discussed previously; popular API frameworks, databases, and other details will continue to change rapidly.
-
-Nevertheless, these details are critical knowledge for working data engineers. We suggest that you study this information as baseline knowledge but read extensively to stay abreast of ongoing developments.
-
-### Databases
-
-In this section, we'll look at common source system database technologies that you'll encounter as a data engineer and high-level considerations for working with these systems. There are as many types of databases as there are use cases for data.
-
-#### Major considerations for understanding database technologies
-
-Here, we introduce major ideas that occur across a variety of database technologies, including those that back software applications and those that support analytics use cases:
-
-**Database management system**
-A database system used to store and serve data. Abbreviated as DBMS, it consists of a storage engine, query optimizer, disaster recovery, and other key components for managing the database system.
-
-**Lookups**
-How does the database find and retrieve data? Indexes can help speed up lookups, but not all databases have indexes. Know whether your database uses indexes; if so, what are the best patterns for designing and maintaining them? Understand how to leverage for efficient extraction. It also helps to have a basic knowledge of the major types of indexes, including B-tree and log-structured merge-trees (LSM).
-
-**Query optimizer**
-Does the database utilize an optimizer? What are its characteristics?
-
-**Scaling and distribution**
-Does the database scale with demand? What scaling strategy does it deploy? Does it scale horizontally (more database nodes) or vertically (more resources on a single machine)?
-
-**Modeling patterns**
-What modeling patterns work best with the database (e.g., data normalization or wide tables)? (See Chapter 8 for our discussion of data modeling.)
-
-**CRUD**
-How is data queried, created, updated, and deleted in the database? Every type of database handles CRUD operations differently.
-
-**Consistency**
-Is the database fully consistent, or does it support a relaxed consistency model (e.g., eventual consistency)? Does the database support optional consistency modes for reads and writes (e.g., strongly consistent reads)?
-
-We divide databases into relational and nonrelational categories. In truth, the nonrelational category is far more diverse, but relational databases still occupy significant space in application backends.
-
-#### Relational databases
-
-A relational database management system (RDBMS) is one of the most common application backends. Relational databases were developed at IBM in the 1970s and popularized by Oracle in the 1980s. The growth of the internet saw the rise of the LAMP stack (Linux, Apache web server, MySQL, PHP) and an explosion of vendor and open source RDBMS options. Even with the rise of NoSQL databases, relational databases have remained extremely popular.
-
-Data is stored in a table of relations (rows), and each relation contains multiple fields (columns). Note that we use the terms column and field interchangeably throughout this book. Each relation in the table has the same schema (a sequence of columns with assigned static types such as string, integer, or float). Rows are typically stored as a contiguous sequence of bytes on disk.
-
-Tables are typically indexed by a primary key, a unique field for each row in the table. The indexing strategy for the primary key is closely connected with the layout of the table on disk.
-
-Tables can also have various foreign keys—fields with values connected with the values of primary keys in other tables, facilitating joins, and allowing for complex schemas that spread data across multiple tables. In particular, it is possible to design a normalized schema. Normalization is a strategy for ensuring that data in records is not duplicated in multiple places, thus avoiding the need to update states in multiple locations at once and preventing inconsistencies (see Chapter 8).
-
-RDBMS systems are typically ACID compliant. Combining a normalized schema, ACID compliance, and support for high transaction rates makes relational database systems ideal for storing rapidly changing application states. The challenge for data engineers is to determine how to capture state information over time.
-
-A full discussion of the theory, history, and technology of RDBMS is beyond the scope of this book. We encourage you to study RDBMS systems, relational algebra, and strategies for normalization because they're widespread, and you'll encounter them frequently.
-
-#### Nonrelational databases: NoSQL
-
-While relational databases are terrific for many use cases, they're not a one-size-fits-all solution. We often see that people start with a relational database under the impression it's a universal appliance and shoehorn in a ton of use cases and workloads. As data and query requirements morph, the relational database collapses under its weight. At that point, you'll want to use a database that's appropriate for the specific workload under pressure. Enter nonrelational or NoSQL databases. NoSQL, which stands for not only SQL, refers to a whole class of databases that abandon the relational paradigm.
-
-On the one hand, dropping relational constraints can improve performance, scalability, and schema flexibility. But as always in architecture, trade-offs exist. NoSQL databases also typically abandon various RDBMS characteristics, such as strong consistency, joins, or a fixed schema.
-
-A big theme of this book is that data innovation is constant. Let's take a quick look at the history of NoSQL, as it's helpful to gain a perspective on why and how data innovations impact your work as a data engineer. In the early 2000s, tech companies such as Google and Amazon began to outgrow their relational databases and pioneered new distributed, nonrelational databases to scale their web platforms.
-
-While the term NoSQL first appeared in 1998, the modern version was coined by Eric Evans in the 2000s. He tells the story in a 2009 blog post describing how the name came about without much thought during IRC discussions about organizing a meetup.
-
-NoSQL remains vague in 2022, but it's been widely adopted to describe a universe of "new school" databases, alternatives to relational databases.
-
-There are numerous flavors of NoSQL database designed for almost any imaginable use case. Because there are far too many NoSQL databases to cover exhaustively in this section, we consider the following database types: key-value, document, wide-column, graph, search, and time series. These databases are all wildly popular and enjoy widespread adoption. A data engineer should understand these types of databases, including usage considerations, the structure of the data they store, and how to leverage each in the data engineering lifecycle.
-
-#### Key-value stores
-
-A key-value database is a nonrelational database that retrieves records using a key that uniquely identifies each record. This is similar to hash map or dictionary data structures presented in many programming languages but potentially more scalable. Key-value stores encompass several NoSQL database types—for example, document stores and wide column databases.
-
-Different types of key-value databases offer a variety of performance characteristics to serve various application needs. For example, in-memory key-value databases are popular for caching session data for web and mobile applications, where ultra-fast lookup and high concurrency are required. Storage in these systems is typically temporary; if the database shuts down, the data disappears. Such caches can reduce pressure on the main application database and serve speedy responses.
-
-Of course, key-value stores can also serve applications requiring high-durability persistence. An ecommerce application may need to save and update massive amounts of event state changes for a user and their orders. A user logs into the ecommerce application, clicks around various screens, adds items to a shopping cart, and then checks out. Each event must be durably stored for retrieval. Key-value stores often persist data to disk and across multiple nodes to support such use cases.
-
-#### Document stores
-
-As mentioned previously, a document store is a specialized key-value store. In this context, a document is a nested object; we can usually think of each document as a JSON object for practical purposes. Documents are stored in collections and retrieved by key. A collection is roughly equivalent to a table in a relational database.
-
-One key difference between relational databases and document stores is that the latter does not support joins. This means that data cannot be easily normalized, i.e., split across multiple tables. (Applications can still join manually. Code can look up a document, extract a property, and then retrieve another document.) Ideally, all related data can be stored in the same document.
-
-In many cases, the same data must be stored in multiple documents spread across numerous collections; software engineers must be careful to update a property everywhere it is stored. (Many document stores support a notion of transactions to facilitate this.)
-
-Document databases generally embrace all the flexibility of JSON and don't enforce schema or types; this is a blessing and a curse. On the one hand, this allows the schema to be highly flexible and expressive. The schema can also evolve as an application grows. On the flip side, we've seen document databases become absolute nightmares to manage and query. If developers are not careful in managing schema evolution, data may become inconsistent and bloated over time. Schema evolution can also break downstream ingestion and cause headaches for data engineers if it's not communicated in a timely fashion (before deployment).
-
-To query the data, you can retrieve records by key. Note that most document databases also support the creation of indexes and lookup tables to allow retrieval of documents by specific properties. This is often invaluable in application development when you need to search for documents in various ways.
-
-Another critical technical detail for data engineers is that document stores are generally not ACID compliant, unlike relational databases. Technical expertise in a particular document store is essential to understanding performance, tuning, configuration, related effects on writes, consistency, durability, etc. For example, many document stores are eventually consistent. Allowing data distribution across a cluster is a boon for scaling and performance but can lead to catastrophes when engineers and developers don't understand the implications.
-
-To run analytics on document stores, engineers generally must run a full scan to extract all data from a collection or employ a CDC strategy to send events to a target stream. The full scan approach can have both performance and cost implications. The scan often slows the database as it runs, and many serverless cloud offerings charge a significant fee for each full scan. In document databases, it's often helpful to create an index to help speed up queries.
-
-#### Wide-column
-
-A wide-column database is optimized for storing massive amounts of data with high transaction rates and extremely low latency. These databases can scale to extremely high write rates and vast amounts of data. Specifically, wide-column databases can support petabytes of data, millions of requests per second, and sub-10ms latency. These characteristics have made wide-column databases popular in ecommerce, fintech, ad tech, IoT, and real-time personalization applications. Data engineers must be aware of the operational characteristics of the wide-column databases they work with to set up a suitable configuration, design the schema, and choose an appropriate row key to optimize performance and avoid common operational issues.
-
-These databases support rapid scans of massive amounts of data, but they do not support complex queries. They have only a single index (the row key) for lookups. Data engineers must generally extract data and send it to a secondary analytics system to run complex queries to deal with these limitations. This can be accomplished by running large scans for the extraction or employing CDC to capture an event stream.
-
-#### Graph databases
-
-Graph databases explicitly store data with a mathematical graph structure (as a set of nodes and edges). Neo4j has proven extremely popular, while Amazon, Oracle, and other vendors offer their graph database products. Roughly speaking, graph databases are a good fit when you want to analyze the connectivity between elements.
-
-For example, you could use a document database to store one document for each user describing their properties. You could add an array element for connections that contains directly connected users' IDs in a social media context. It's pretty easy to determine the number of direct connections a user has, but suppose you want to know how many users can be reached by traversing two direct connections. You could answer this question by writing complex code, but each query would run slowly and consume significant resources. The document store is simply not optimized for this use case.
-
-Graph databases are designed for precisely this type of query. Their data structures allow for queries based on the connectivity between elements; graph databases are indicated when we care about understanding complex traversals between elements. In the parlance of graphs, we store nodes (users in the preceding example) and edges (connections between users). Graph databases support rich data models for both nodes and edges. Depending on the underlying graph database engine, graph databases utilize specialized query languages such as SPARQL, Resource Description Framework (RDF), Graph Query Language (GQL), and Cypher.
-
-We anticipate that graph database applications will grow dramatically outside of tech companies; market analyses also predict rapid growth. Of course, graph databases are beneficial from an operational perspective and support the kinds of complex social relationships critical to modern applications. Graph structures are also fascinating from the perspective of data science and ML, potentially revealing deep insights into human interactions and behavior.
-
-This introduces unique challenges for data engineers who may be more accustomed to dealing with structured relations, documents, or unstructured data. Engineers must choose whether to do the following:
-
-- Map source system graph data into one of their existing preferred paradigms
-- Analyze graph data within the source system itself
-- Adopt graph-specific analytics tools
-
-Graph data can be reencoded into rows in a relational database, which may be a suitable solution depending on the analytics use case. Transactional graph databases are also designed for analytics, although large queries may overload production systems. Contemporary cloud-based graph databases support read-heavy graph analytics on massive quantities of data.
-
-#### Search
-
-A search database is a nonrelational database used to search your data's complex and straightforward semantic and structural characteristics. Two prominent use cases exist for a search database: text search and log analysis. Text search involves searching a body of text for keywords or phrases, matching on exact, fuzzy, or semantically similar matches. Log analysis is typically used for anomaly detection, real-time monitoring, security analytics, and operational analytics. Queries can be optimized and sped up with the use of indexes.
-
-Depending on the type of company you work at, you may use search databases either regularly or not at all. Regardless, it's good to be aware they exist in case you come across them in the wild. Search databases are popular for fast search and retrieval and can be found in various applications; an ecommerce site may power its product search using a search database. As a data engineer, you might be expected to bring data from a search database (such as Elasticsearch, Apache Solr or Lucene, or Algolia) into downstream KPI reports or something similar.
-
-#### Time series
-
-A time series is a series of values organized by time. For example, stock prices might move as trades are executed throughout the day, or a weather sensor will take atmospheric temperatures every minute. Any events that are recorded over time—either regularly or sporadically—are time-series data. A time-series database is optimized for retrieving and statistical processing of time-series data.
-
-While time-series data such as orders, shipments, logs, and so forth have been stored in relational databases for ages, these data sizes and volumes were often tiny. As data grew faster and bigger, new special-purpose databases were needed. Time-series databases address the needs of growing, high-velocity data volumes from IoT, event and application logs, ad tech, and fintech, among many other use cases. Often these workloads are write-heavy. As a result, time-series databases often utilize memory buffering to support fast writes and reads.
-
-We should distinguish between measurement and event-based data, common in time-series databases. Measurement data is generated regularly, such as temperature or air-quality sensors. Event-based data is irregular and created every time an event occurs—for instance, when a motion sensor detects movement.
-
-The schema for a time series typically contains a timestamp and a small set of fields. Because the data is time-dependent, the data is ordered by the timestamp. This makes time-series databases suitable for operational analytics but not great for BI use cases. Joins are not common, though some quasi time-series databases such as Apache Druid support joins. Many time-series databases are available, both as open source and paid options.
-
-### APIs
-
-APIs are now a standard and pervasive way of exchanging data in the cloud, for SaaS platforms, and between internal company systems. Many types of API interfaces exist across the web, but we are principally interested in those built around HTTP, the most popular type on the web and in the cloud.
-
-#### REST
-
-We'll first talk about REST, currently the dominant API paradigm. As noted in Chapter 4, REST stands for representational state transfer. This set of practices and philosophies for building HTTP web APIs was laid out by Roy Fielding in 2000 in a PhD dissertation. REST is built around HTTP verbs, such as GET and PUT; in practice, modern REST uses only a handful of the verb mappings outlined in the original dissertation.
-
-One of the principal ideas of REST is that interactions are stateless. Unlike in a Linux terminal session, there is no notion of a session with associated state variables such as a working directory; each REST call is independent. REST calls can change the system's state, but these changes are global, applying to the full system rather than a current session.
-
-Critics point out that REST is in no way a full specification. REST stipulates basic properties of interactions, but developers utilizing an API must gain a significant amount of domain knowledge to build applications or pull data effectively.
-
-We see great variation in levels of API abstraction. In some cases, APIs are merely a thin wrapper over internals that provides the minimum functionality required to protect the system from user requests. In other examples, a REST data API is a masterpiece of engineering that prepares data for analytics applications and supports advanced reporting.
-
-A couple of developments have simplified setting up data-ingestion pipelines from REST APIs. First, data providers frequently supply client libraries in various languages, especially in Python. Client libraries remove much of the boilerplate labor of building API interaction code. Client libraries handle critical details such as authentication and map fundamental methods into accessible classes.
-
-Second, various services and open source libraries have emerged to interact with APIs and manage data synchronization. Many SaaS and open source vendors provide off-the-shelf connectors for common APIs. Platforms also simplify the process of building custom connectors as required.
-
-There are numerous data APIs without client libraries or out-of-the-box connector support. As we emphasize throughout the book, engineers would do well to reduce undifferentiated heavy lifting by using off-the-shelf tools. However, low-level plumbing tasks still consume many resources. At virtually any large company, data engineers will need to deal with the problem of writing and maintaining custom code to pull data from APIs, which requires understanding the structure of the data as provided, developing appropriate data-extraction code, and determining a suitable data synchronization strategy.
+1. [Introduction](#1-introduction)
+2. [Sources of Data: How Is Data Created?](#2-sources-of-data-how-is-data-created)
+3. [Source Systems: Main Ideas](#3-source-systems-main-ideas)
+   - 3.1. [Files and Unstructured Data](#31-files-and-unstructured-data)
+   - 3.2. [APIs](#32-apis)
+   - 3.3. [Application Databases (OLTP Systems)](#33-application-databases-oltp-systems)
+   - 3.4. [Online Analytical Processing System](#34-online-analytical-processing-system)
+   - 3.5. [Change Data Capture](#35-change-data-capture)
+   - 3.6. [Logs](#36-logs)
+   - 3.7. [Database Logs](#37-database-logs)
+   - 3.8. [CRUD](#38-crud)
+   - 3.9. [Insert-Only](#39-insert-only)
+   - 3.10. [Messages and Streams](#310-messages-and-streams)
+   - 3.11. [Types of Time](#311-types-of-time)
+4. [Source System Practical Details](#4-source-system-practical-details)
+   - 4.1. [Databases](#41-databases)
+   - 4.2. [APIs](#42-apis)
+   - 4.3. [Data Sharing](#43-data-sharing)
+   - 4.4. [Third-Party Data Sources](#44-third-party-data-sources)
+   - 4.5. [Message Queues and Event-Streaming Platforms](#45-message-queues-and-event-streaming-platforms)
+5. [Whom You'll Work With](#5-whom-youll-work-with)
+6. [Undercurrents and Their Impact on Source Systems](#6-undercurrents-and-their-impact-on-source-systems)
+7. [Conclusion](#7-conclusion)
+
+---
+
+## 1. Introduction
+
+**In plain English:** Source systems are like the faucets in your house - before you can use water (data) anywhere else, you need to understand where it comes from, how it flows, and what quirks each faucet has (temperature, pressure, reliability).
+
+**In technical terms:** Source systems generate the data for the rest of the data engineering lifecycle. The job of a data engineer is to take data from source systems, do something with it, and make it helpful in serving downstream use cases. Understanding where data exists, how it's generated, and its characteristics is fundamental.
+
+**Why it matters:** As data proliferates, especially with the rise of data sharing, a data engineer's role is shifting toward understanding the interplay between data sources and destinations. While basic plumbing tasks will simplify, understanding the nature of data as it's created in source systems remains critical.
+
+> **Insight**
+>
+> The basic plumbing tasks of data engineering—moving data from A to B—will simplify dramatically with modern tools. However, it will remain critical to understand the nature of data as it's created in source systems.
+
+---
+
+## 2. Sources of Data: How Is Data Created?
+
+**In plain English:** Data creation happens everywhere - from your voice turning into text in a messaging app to credit card transactions being recorded in databases. It can be analog (speech, writing) or digital (database records, sensor readings).
+
+**In technical terms:** Data is an unorganized, context-less collection of facts and figures created through analog means (vocal speech, writing on paper) or digital means (native digital systems or analog-to-digital conversion).
+
+**Why it matters:** Understanding how your source system generates data directly impacts your ability to ingest, process, and use that data effectively downstream.
+
+<DiagramContainer title="Data Creation Patterns">
+  <Row gap="lg">
+    <Column gap="sm" align="center">
+      <Box color={colors.purple} icon="🗣️" size="lg">Analog Data</Box>
+      <Box color={colors.slate} variant="subtle">Real-world creation</Box>
+      <Column gap="xs">
+        <Box color={colors.purple} variant="outlined" size="sm">Vocal speech</Box>
+        <Box color={colors.purple} variant="outlined" size="sm">Sign language</Box>
+        <Box color={colors.purple} variant="outlined" size="sm">Writing on paper</Box>
+        <Box color={colors.purple} variant="outlined" size="sm">Playing instruments</Box>
+      </Column>
+    </Column>
+    <Arrow direction="right" label="Conversion" />
+    <Column gap="sm" align="center">
+      <Box color={colors.blue} icon="💾" size="lg">Digital Data</Box>
+      <Box color={colors.slate} variant="subtle">Digital creation</Box>
+      <Column gap="xs">
+        <Box color={colors.blue} variant="outlined" size="sm">Database transactions</Box>
+        <Box color={colors.blue} variant="outlined" size="sm">IoT sensor readings</Box>
+        <Box color={colors.blue} variant="outlined" size="sm">Mobile app interactions</Box>
+        <Box color={colors.blue} variant="outlined" size="sm">Credit card terminals</Box>
+      </Column>
+    </Column>
+  </Row>
+</DiagramContainer>
+
+### Common Data Sources
+
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Application Interactions",
+      icon: "📱",
+      color: colors.blue,
+      items: [
+        "Website clicks and navigation",
+        "Mobile app usage",
+        "Form submissions",
+        "User authentication events"
+      ]
+    },
+    {
+      title: "IoT and Sensors",
+      icon: "🌡️",
+      color: colors.green,
+      items: [
+        "Temperature sensors",
+        "Motion detectors",
+        "GPS trackers",
+        "Industrial equipment"
+      ]
+    },
+    {
+      title: "Business Transactions",
+      icon: "💳",
+      color: colors.orange,
+      items: [
+        "Credit card transactions",
+        "Stock trades",
+        "Order processing",
+        "Inventory updates"
+      ]
+    }
+  ]}
+/>
+
+---
+
+## 3. Source Systems: Main Ideas
+
+This section covers fundamental concepts you'll encounter when working with source systems - the patterns and technologies that generate data across the data engineering lifecycle.
+
+### 3.1. Files and Unstructured Data
+
+**In plain English:** Files are like envelopes - they can contain letters (text), photos (images), or recordings (audio). They're the universal way to exchange data, even though we'd prefer everything to be programmatic.
+
+**In technical terms:** A file is a sequence of bytes, typically stored on a disk. Applications write data to files to store parameters, events, logs, images, and audio. Files remain a universal medium of data exchange.
+
+**Why it matters:** Despite the rise of APIs and databases, much of the world still sends and receives files. Government agencies, business partners, and legacy systems often exchange data as Excel, CSV, or JSON files.
+
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Structured Files",
+      icon: "📊",
+      color: colors.blue,
+      items: [
+        "Excel spreadsheets",
+        "CSV (with consistent schema)",
+        "Fixed-width format",
+        "Parquet, ORC, Avro"
+      ]
+    },
+    {
+      title: "Semistructured Files",
+      icon: "🗂️",
+      color: colors.purple,
+      items: [
+        "JSON documents",
+        "XML files",
+        "CSV (variable schema)",
+        "YAML configuration"
+      ]
+    },
+    {
+      title: "Unstructured Files",
+      icon: "📝",
+      color: colors.orange,
+      items: [
+        "Plain text (TXT)",
+        "Log files",
+        "Images and videos",
+        "Audio files"
+      ]
+    }
+  ]}
+/>
+
+### 3.2. APIs
+
+**In plain English:** APIs are like restaurant menus - they provide a standard way to order (request) what you want without needing to know how the kitchen (system) prepares it. In theory they're simple, but in practice they often require significant custom code.
+
+**In technical terms:** Application Programming Interfaces (APIs) provide a standard way of exchanging data between systems. While they theoretically simplify data ingestion, many APIs still expose significant complexity that data engineers must manage.
+
+**Why it matters:** Despite the rise of automated API ingestion services, data engineers must often invest significant energy into maintaining custom API connections and handling their quirks.
+
+### 3.3. Application Databases (OLTP Systems)
+
+**In plain English:** An OLTP database is like a bank's live transaction system - it needs to handle thousands of people checking balances, making transfers, and depositing checks simultaneously, all updating records in milliseconds.
+
+**In technical terms:** An application database stores the state of an application. Online Transaction Processing (OLTP) systems are databases that read and write individual data records at a high rate, supporting low latency and high concurrency.
+
+**Why it matters:** OLTP databases excel as application backends for high-concurrency use cases but struggle with large-scale analytics queries. Understanding this trade-off is critical when designing data pipelines.
+
+<DiagramContainer title="OLTP Transaction Example: Bank Transfer">
+  <ProcessFlow
+    direction="horizontal"
+    steps={[
+      {
+        title: "Check Balance",
+        description: "Verify Account A has sufficient funds",
+        icon: "🔍",
+        color: colors.blue
+      },
+      {
+        title: "Begin Transaction",
+        description: "Start atomic operation",
+        icon: "🔒",
+        color: colors.purple
+      },
+      {
+        title: "Debit Account A",
+        description: "Subtract amount from source",
+        icon: "➖",
+        color: colors.orange
+      },
+      {
+        title: "Credit Account B",
+        description: "Add amount to destination",
+        icon: "➕",
+        color: colors.green
+      },
+      {
+        title: "Commit or Rollback",
+        description: "All succeed or all fail",
+        icon: "✅",
+        color: colors.blue
+      }
+    ]}
+  />
+</DiagramContainer>
+
+#### ACID Characteristics
+
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Atomicity",
+      icon: "⚛️",
+      color: colors.blue,
+      items: [
+        "Transactions are all-or-nothing",
+        "Either all changes commit",
+        "Or all changes rollback",
+        "No partial updates"
+      ]
+    },
+    {
+      title: "Consistency",
+      icon: "🎯",
+      color: colors.purple,
+      items: [
+        "Reads return last written version",
+        "Database maintains valid state",
+        "Constraints are enforced",
+        "Data integrity preserved"
+      ]
+    },
+    {
+      title: "Isolation",
+      icon: "🔒",
+      color: colors.green,
+      items: [
+        "Concurrent updates don't interfere",
+        "Transactions execute sequentially",
+        "Prevents race conditions",
+        "Maintains data consistency"
+      ]
+    },
+    {
+      title: "Durability",
+      icon: "💾",
+      color: colors.orange,
+      items: [
+        "Committed data never lost",
+        "Survives power loss",
+        "Persisted to stable storage",
+        "Recoverability guaranteed"
+      ]
+    }
+  ]}
+/>
+
+> **Insight**
+>
+> Not all ACID characteristics are required for all use cases. Relaxing constraints like consistency (using eventual consistency) can dramatically improve performance and scale. Understanding the consistency model you're working with helps prevent disasters.
+
+#### OLTP and Analytics
+
+:::caution
+Running analytics directly on OLTP systems works in the short term but is not scalable. At some point, analytical queries will cause performance issues due to structural limitations or resource contention with transactional workloads.
+:::
+
+**Hybrid Approach: Data Applications**
+
+<ComparisonTable
+  beforeTitle="Traditional OLTP"
+  afterTitle="Data Applications"
+  beforeColor={colors.orange}
+  afterColor={colors.green}
+  items={[
+    {
+      label: "Purpose",
+      before: "Transactional workloads only",
+      after: "Hybrid transactional + analytics"
+    },
+    {
+      label: "Queries",
+      before: "Single record lookups, updates",
+      after: "Quick updates + analytical queries"
+    },
+    {
+      label: "Use Case",
+      before: "Application backend",
+      after: "SaaS apps with built-in analytics"
+    },
+    {
+      label: "Challenge",
+      before: "Performance degradation with analytics",
+      after: "Balancing both workload types"
+    }
+  ]}
+/>
+
+### 3.4. Online Analytical Processing System
+
+**In plain English:** An OLAP system is like a library optimized for researchers who need to scan thousands of books quickly, rather than finding one specific book. Looking up individual records is slow, but analyzing millions of records is fast.
+
+**In technical terms:** Online Analytical Processing (OLAP) systems are built to run large analytics queries, typically inefficient at handling lookups of individual records. Modern columnar databases scan large volumes of data (often 100MB+ blocks) with minimal data block sizes.
+
+**Why it matters:** While OLAP systems are typically storage and query systems for analytics, engineers often need to read data from them (e.g., training ML models from a data warehouse, or reverse ETL workflows sending derived data back to source systems).
+
+<DiagramContainer title="OLTP vs OLAP">
+  <Row gap="lg">
+    <Column gap="sm" align="center">
+      <Box color={colors.blue} icon="⚡" size="lg">OLTP</Box>
+      <Box color={colors.slate} variant="subtle">Optimized for transactions</Box>
+      <Column gap="xs">
+        <Box color={colors.blue} variant="outlined" size="sm">Row-based storage</Box>
+        <Box color={colors.blue} variant="outlined" size="sm">Individual record lookups</Box>
+        <Box color={colors.blue} variant="outlined" size="sm">High concurrency</Box>
+        <Box color={colors.blue} variant="outlined" size="sm">Sub-millisecond latency</Box>
+      </Column>
+    </Column>
+    <Column gap="sm" align="center">
+      <Box color={colors.purple} icon="📊" size="lg">OLAP</Box>
+      <Box color={colors.slate} variant="subtle">Optimized for analytics</Box>
+      <Column gap="xs">
+        <Box color={colors.purple} variant="outlined" size="sm">Column-based storage</Box>
+        <Box color={colors.purple} variant="outlined" size="sm">Bulk data scans</Box>
+        <Box color={colors.purple} variant="outlined" size="sm">Complex aggregations</Box>
+        <Box color={colors.purple} variant="outlined" size="sm">Process petabytes</Box>
+      </Column>
+    </Column>
+  </Row>
+</DiagramContainer>
+
+### 3.5. Change Data Capture
+
+**In plain English:** Change Data Capture (CDC) is like having a security camera that records every change to your database - every insert, update, and delete - creating a real-time stream of what's happening.
+
+**In technical terms:** CDC is a method for extracting each change event (insert, update, delete) that occurs in a database. It's frequently leveraged to replicate between databases in near real-time or create event streams for downstream processing.
+
+**Why it matters:** CDC enables near real-time analytics and event-driven architectures by capturing database changes as they happen, rather than periodically snapshotting entire tables.
+
+<DiagramContainer title="Change Data Capture Flow">
+  <ProcessFlow
+    direction="horizontal"
+    steps={[
+      {
+        title: "Database Changes",
+        description: "Insert, Update, Delete operations",
+        icon: "💾",
+        color: colors.blue
+      },
+      {
+        title: "CDC Capture",
+        description: "Extract change events from logs",
+        icon: "📹",
+        color: colors.purple
+      },
+      {
+        title: "Event Stream",
+        description: "Publish to message queue/stream",
+        icon: "📨",
+        color: colors.green
+      },
+      {
+        title: "Consumers",
+        description: "Analytics, replication, triggers",
+        icon: "🎯",
+        color: colors.orange
+      }
+    ]}
+  />
+</DiagramContainer>
+
+**CDC Implementation Approaches:**
+
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Log-Based CDC (Relational DBs)",
+      icon: "📜",
+      color: colors.blue,
+      items: [
+        "Process database transaction logs",
+        "Capture all changes",
+        "Near real-time streaming",
+        "Minimal performance impact"
+      ]
+    },
+    {
+      title: "Stream Export (Cloud NoSQL)",
+      icon: "☁️",
+      color: colors.purple,
+      items: [
+        "Native stream export features",
+        "Send to target storage",
+        "Configurable retention",
+        "Built-in cloud integration"
+      ]
+    }
+  ]}
+/>
+
+### 3.6. Logs
+
+**In plain English:** Logs are like a diary for your systems - they record what happened, when it happened, and who (or what) made it happen. They're invaluable for debugging, security, and understanding system behavior.
+
+**In technical terms:** A log captures information about events that occur in systems. Logs track traffic patterns, usage, system boots, application crashes, and other events, providing rich data sources for analysis, ML, and automation.
+
+**Why it matters:** Logs are everywhere (operating systems, applications, servers, containers, networks, IoT devices) and provide valuable data for downstream analysis, but extracting value often requires significant effort.
+
+#### Essential Log Elements
+
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Who",
+      icon: "👤",
+      color: colors.blue,
+      items: [
+        "User ID or system account",
+        "Service account name",
+        "Web browser user agent",
+        "Application identifier"
+      ]
+    },
+    {
+      title: "What Happened",
+      icon: "📝",
+      color: colors.purple,
+      items: [
+        "Event type and description",
+        "Related metadata",
+        "Error codes or statuses",
+        "Contextual information"
+      ]
+    },
+    {
+      title: "When",
+      icon: "⏰",
+      color: colors.green,
+      items: [
+        "Timestamp of event",
+        "Time zone information",
+        "Event sequence number",
+        "Duration if applicable"
+      ]
+    }
+  ]}
+/>
+
+#### Log Encoding Types
+
+<ComparisonTable
+  beforeTitle="Binary-Encoded Logs"
+  afterTitle="Text-Based Logs"
+  beforeColor={colors.blue}
+  afterColor={colors.purple}
+  items={[
+    {
+      label: "Format",
+      before: "Custom compact binary format",
+      after: "JSON, plain text, semistructured"
+    },
+    {
+      label: "Efficiency",
+      before: "Space efficient, fast I/O",
+      after: "Less efficient, larger size"
+    },
+    {
+      label: "Readability",
+      before: "Not human-readable",
+      after: "Human and machine-readable"
+    },
+    {
+      label: "Portability",
+      before: "Database-specific format",
+      after: "Portable across systems"
+    },
+    {
+      label: "Example",
+      before: "Database write-ahead logs",
+      after: "Application JSON logs"
+    }
+  ]}
+/>
+
+**Log Resolution and Levels:**
+
+- **Resolution:** Amount of event data captured (full reconstruction vs. notification only)
+- **Log Levels:** Conditions for recording (ALL, DEBUG, INFO, WARN, ERROR, FATAL)
+- **Latency:** Batch (continuous file writing) vs. Real-time (message systems like Kafka)
+
+### 3.7. Database Logs
+
+**In plain English:** Database logs are like a flight recorder for your database - they record every operation before it happens, ensuring that even if the plane (server) crashes, you can recover and complete any unfinished work.
+
+**In technical terms:** Write-ahead logs (WALs) are binary files in database-native format that play a crucial role in database guarantees and recoverability. The database stores each operation in the log before acknowledging the request, allowing state recovery on reboot.
+
+**Why it matters:** Database logs are extremely useful in data engineering, especially for CDC to generate event streams from database changes. They're the foundation of database durability and consistency guarantees.
+
+<DiagramContainer title="Write-Ahead Log Process">
+  <ProcessFlow
+    direction="vertical"
+    steps={[
+      {
+        title: "Write Request Received",
+        description: "Application requests database update",
+        icon: "📥",
+        color: colors.blue
+      },
+      {
+        title: "Log Operation First",
+        description: "Write to WAL before modifying data",
+        icon: "📝",
+        color: colors.purple
+      },
+      {
+        title: "Acknowledge Request",
+        description: "Confirm operation logged (durable)",
+        icon: "✅",
+        color: colors.green
+      },
+      {
+        title: "Apply to Database",
+        description: "Actually modify data pages",
+        icon: "💾",
+        color: colors.orange
+      },
+      {
+        title: "Recovery on Failure",
+        description: "Replay logs to restore state",
+        icon: "🔄",
+        color: colors.blue
+      }
+    ]}
+  />
+</DiagramContainer>
+
+### 3.8. CRUD
+
+**In plain English:** CRUD is like the basic operations you can do with a filing cabinet - Create a new file, Read what's in a file, Update the contents, or Delete the file entirely. It's the foundation of how most applications manage data.
+
+**In technical terms:** CRUD (Create, Read, Update, Delete) is a transactional pattern representing the four basic operations of persistent storage. It's the most common pattern for storing application state in databases.
+
+**Why it matters:** Understanding CRUD patterns helps you decide between snapshot-based extraction (point-in-time copy) and event extraction with CDC (complete history of operations) for your data pipelines.
+
+<DiagramContainer title="CRUD Operations">
+  <Row gap="md">
+    <Column gap="sm">
+      <Box color={colors.blue} icon="➕" size="lg">Create</Box>
+      <Box color={colors.slate} variant="subtle" size="sm">Insert new records</Box>
+    </Column>
+    <Column gap="sm">
+      <Box color={colors.green} icon="👁️" size="lg">Read</Box>
+      <Box color={colors.slate} variant="subtle" size="sm">Retrieve existing data</Box>
+    </Column>
+    <Column gap="sm">
+      <Box color={colors.orange} icon="✏️" size="lg">Update</Box>
+      <Box color={colors.slate} variant="subtle" size="sm">Modify existing records</Box>
+    </Column>
+    <Column gap="sm">
+      <Box color={colors.red} icon="🗑️" size="lg">Delete</Box>
+      <Box color={colors.slate} variant="subtle" size="sm">Remove records</Box>
+    </Column>
+  </Row>
+</DiagramContainer>
+
+**CRUD in APIs and Databases:**
+
+- **RESTful HTTP:** POST (Create), GET (Read), PUT/PATCH (Update), DELETE (Delete)
+- **SQL Databases:** INSERT, SELECT, UPDATE, DELETE
+- **NoSQL Databases:** Varies by database type but follows CRUD concepts
+
+### 3.9. Insert-Only
+
+**In plain English:** Instead of updating a customer's address when they move, insert-only keeps every address they've ever had with timestamps. It's like keeping a complete history book instead of erasing and rewriting entries.
+
+**In technical terms:** The insert-only pattern retains history directly in a table by inserting new records with timestamps rather than updating existing ones. To read the current state, you query for the latest record by timestamp.
+
+**Why it matters:** Insert-only maintains a database log directly in the table itself, making it especially useful when applications need access to history (e.g., banking applications showing address history, audit trails).
+
+<DiagramContainer title="Insert-Only Pattern Example">
+  <Column gap="md">
+    <Box color={colors.blue} variant="filled" size="lg">Customer Address History</Box>
+    <Row gap="md">
+      <Column gap="xs">
+        <Box color={colors.green} variant="outlined">Record ID: 1</Box>
+        <Box color={colors.slate} variant="subtle" size="sm">Address: 123 Main St</Box>
+        <Box color={colors.slate} variant="subtle" size="sm">Timestamp: 2021-09-19</Box>
+      </Column>
+      <Arrow direction="right" label="Customer moves" />
+      <Column gap="xs">
+        <Box color={colors.green} variant="outlined">Record ID: 1</Box>
+        <Box color={colors.slate} variant="subtle" size="sm">Address: 456 Oak Ave</Box>
+        <Box color={colors.slate} variant="subtle" size="sm">Timestamp: 2021-09-30</Box>
+      </Column>
+    </Row>
+    <Box color={colors.orange} variant="subtle">
+      Both records exist. Query MAX(timestamp) to get current address.
+    </Box>
+  </Column>
+</DiagramContainer>
+
+**Advantages and Disadvantages:**
+
+<ComparisonTable
+  beforeTitle="Advantages"
+  afterTitle="Disadvantages"
+  beforeColor={colors.green}
+  afterColor={colors.red}
+  items={[
+    {
+      label: "History",
+      before: "Complete change history maintained",
+      after: "Tables grow very large over time"
+    },
+    {
+      label: "Audit Trail",
+      before: "Natural audit capabilities",
+      after: "Record purging may be needed"
+    },
+    {
+      label: "Application Fit",
+      before: "Perfect for banking, compliance",
+      after: "Lookup overhead (MAX aggregation)"
+    },
+    {
+      label: "Analytics",
+      before: "Easy to analyze changes over time",
+      after: "Expensive if many versions per ID"
+    }
+  ]}
+/>
+
+### 3.10. Messages and Streams
+
+**In plain English:** A message is like sending a single text message - once read and acknowledged, it's gone from the queue. A stream is like a recorded video - events accumulate in order, and you can rewind to replay them, analyze patterns, or process them multiple times.
+
+**In technical terms:** A message is raw data communicated across systems via a message queue, removed after delivery. A stream is an append-only log of event records persisted over a long retention window (weeks or months), allowing complex operations like aggregations and time-based rewinding.
+
+**Why it matters:** Understanding the difference helps you choose the right tool - use message queues for discrete actions (turn on furnace), use streams when you care about history and patterns (analyze temperature trends).
+
+<ComparisonTable
+  beforeTitle="Message Queue"
+  afterTitle="Event Stream"
+  beforeColor={colors.blue}
+  afterColor={colors.purple}
+  items={[
+    {
+      label: "Purpose",
+      before: "Discrete, singular signals",
+      after: "Ordered sequence of events"
+    },
+    {
+      label: "Persistence",
+      before: "Removed after consumption",
+      after: "Retained for weeks/months"
+    },
+    {
+      label: "Use Case",
+      before: "Trigger actions, routing messages",
+      after: "Analytics, aggregations, replay"
+    },
+    {
+      label: "Example",
+      before: "IoT device triggers furnace on/off",
+      after: "Analyze temperature trends over time"
+    }
+  ]}
+/>
+
+<DiagramContainer title="Messages vs Streams">
+  <Row gap="lg">
+    <Column gap="sm" align="center">
+      <Box color={colors.blue} icon="📨" size="lg">Message Queue</Box>
+      <Column gap="xs">
+        <Box color={colors.blue} variant="outlined" size="sm">Msg 1 → Consumer → ✓ Removed</Box>
+        <Box color={colors.blue} variant="outlined" size="sm">Msg 2 → Consumer → ✓ Removed</Box>
+        <Box color={colors.blue} variant="outlined" size="sm">Msg 3 → Consumer → ✓ Removed</Box>
+      </Column>
+      <Box color={colors.slate} variant="subtle" size="sm">Ephemeral, action-oriented</Box>
+    </Column>
+    <Column gap="sm" align="center">
+      <Box color={colors.purple} icon="📊" size="lg">Event Stream</Box>
+      <Column gap="xs">
+        <Box color={colors.purple} variant="outlined" size="sm">Event 1 [Retained]</Box>
+        <Box color={colors.purple} variant="outlined" size="sm">Event 2 [Retained]</Box>
+        <Box color={colors.purple} variant="outlined" size="sm">Event 3 [Retained]</Box>
+      </Column>
+      <Box color={colors.slate} variant="subtle" size="sm">Persistent, analytics-oriented</Box>
+    </Column>
+  </Row>
+</DiagramContainer>
+
+> **Insight**
+>
+> Systems that process streams can also process messages, and streaming platforms are frequently used for message passing. We often accumulate messages in streams when we want to perform message analytics on historical patterns.
+
+### 3.11. Types of Time
+
+**In plain English:** Time in data systems is like tracking a package - you care about when it was created (shipped), when it arrived at the warehouse (ingested), when it was scanned (processed), and how long each step took.
+
+**In technical terms:** In streaming contexts where data is continuous and consumed shortly after production, we track multiple time types: event time (when generated), ingestion time (when received), process time (when processed), and processing time (duration).
+
+**Why it matters:** Understanding and recording these time dimensions allows you to accurately track data movement through pipelines, identify bottlenecks, measure latency, and ensure data freshness for downstream consumers.
+
+<DiagramContainer title="Types of Time in Data Pipelines">
+  <ProcessFlow
+    direction="horizontal"
+    steps={[
+      {
+        title: "Event Time",
+        description: "When event is generated in source system",
+        icon: "🎯",
+        color: colors.blue
+      },
+      {
+        title: "Ingestion Time",
+        description: "When event is ingested into storage/queue",
+        icon: "📥",
+        color: colors.purple
+      },
+      {
+        title: "Process Time",
+        description: "When data transformation begins",
+        icon: "⚙️",
+        color: colors.green
+      },
+      {
+        title: "Processing Time",
+        description: "Duration of processing (seconds, minutes, hours)",
+        icon: "⏱️",
+        color: colors.orange
+      }
+    ]}
+  />
+</DiagramContainer>
+
+**Best Practices for Time Tracking:**
+
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Automated Timestamp Collection",
+      icon: "🤖",
+      color: colors.blue,
+      items: [
+        "Automatically log timestamps at each stage",
+        "Include timestamps in event metadata",
+        "Use consistent time zones (UTC)",
+        "Record both wall clock and monotonic time"
+      ]
+    },
+    {
+      title: "Monitoring and Alerting",
+      icon: "🔔",
+      color: colors.purple,
+      items: [
+        "Set up latency monitoring",
+        "Alert on processing time spikes",
+        "Track end-to-end data freshness",
+        "Measure SLA compliance"
+      ]
+    }
+  ]}
+/>
+
+---
+
+## 4. Source System Practical Details
+
+This section dives into practical details of modern source systems - databases, APIs, data sharing, and streaming platforms. While these details have a shorter shelf life than fundamental concepts, they're critical knowledge for working data engineers.
+
+### 4.1. Databases
+
+**In plain English:** Databases are like different types of filing systems - some are optimized for quick lookups of individual files (OLTP), others for scanning thousands of files at once (OLAP), and specialized ones for specific needs like connections (graph) or time-based data (time-series).
+
+**In technical terms:** Database technologies vary widely in their storage engines, query optimizers, scaling strategies, and use cases. Understanding the characteristics of each type helps you design appropriate data extraction and integration strategies.
+
+**Why it matters:** There are as many types of databases as there are use cases for data. Knowing how each type works helps you choose the right extraction method, avoid performance pitfalls, and design robust data pipelines.
+
+#### Major Database Considerations
+
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Storage and Retrieval",
+      icon: "💾",
+      color: colors.blue,
+      items: [
+        "Storage engine type",
+        "Index types (B-tree, LSM)",
+        "Lookup patterns",
+        "Data layout on disk"
+      ]
+    },
+    {
+      title: "Performance and Scale",
+      icon: "📈",
+      color: colors.purple,
+      items: [
+        "Query optimizer behavior",
+        "Horizontal vs vertical scaling",
+        "Distribution strategy",
+        "Consistency model"
+      ]
+    },
+    {
+      title: "Data Operations",
+      icon: "⚙️",
+      color: colors.green,
+      items: [
+        "CRUD operation patterns",
+        "Transaction support (ACID)",
+        "Data modeling best practices",
+        "Backup and recovery"
+      ]
+    }
+  ]}
+/>
+
+#### Relational Databases (RDBMS)
+
+**In plain English:** Relational databases are like spreadsheets on steroids - data is organized in tables with rows and columns, relationships connect tables together, and strict rules (ACID) ensure data stays consistent even when thousands of people are making changes simultaneously.
+
+**In technical terms:** RDBMS stores data in tables of relations (rows) with multiple fields (columns). Tables are indexed by primary keys, connected via foreign keys, and support normalized schemas. RDBMS systems are typically ACID compliant and ideal for rapidly changing application states.
+
+**Why it matters:** Despite the rise of NoSQL, relational databases remain extremely popular for application backends. Understanding normalization, joins, and ACID properties is essential since you'll encounter them frequently.
+
+<DiagramContainer title="Relational Database Structure">
+  <Column gap="md">
+    <Row gap="md">
+      <Column gap="sm">
+        <Box color={colors.blue} variant="filled">Customers Table</Box>
+        <Box color={colors.blue} variant="outlined" size="sm">customer_id (PK)</Box>
+        <Box color={colors.blue} variant="outlined" size="sm">name</Box>
+        <Box color={colors.blue} variant="outlined" size="sm">email</Box>
+      </Column>
+      <Arrow direction="right" label="Foreign Key" />
+      <Column gap="sm">
+        <Box color={colors.green} variant="filled">Orders Table</Box>
+        <Box color={colors.green} variant="outlined" size="sm">order_id (PK)</Box>
+        <Box color={colors.green} variant="outlined" size="sm">customer_id (FK)</Box>
+        <Box color={colors.green} variant="outlined" size="sm">amount</Box>
+      </Column>
+    </Row>
+    <Box color={colors.orange} variant="subtle">
+      Primary keys (PK) uniquely identify rows. Foreign keys (FK) create relationships between tables, enabling joins and normalization.
+    </Box>
+  </Column>
+</DiagramContainer>
+
+**Key RDBMS Characteristics:**
+
+- **Normalized schemas:** Avoid data duplication across tables
+- **ACID compliance:** Transactions maintain consistency
+- **High transaction rates:** Thousands of reads/writes per second
+- **Strong consistency:** Always read the latest written value
+- **Join support:** Complex queries across multiple tables
+
+#### Nonrelational Databases (NoSQL)
+
+**In plain English:** NoSQL databases are like specialized tools in a toolbox - each is optimized for specific jobs. Document stores for flexible JSON data, key-value stores for ultra-fast lookups, graph databases for connected data, and time-series databases for sensor data.
+
+**In technical terms:** NoSQL databases abandon the relational paradigm to improve performance, scalability, and schema flexibility. Trade-offs include relaxed consistency, lack of joins, and schema-on-read approaches.
+
+**Why it matters:** As data and query requirements evolve, relational databases can collapse under their weight. NoSQL databases provide specialized solutions for specific workloads, but you must understand their trade-offs.
+
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Key-Value Stores",
+      icon: "🔑",
+      color: colors.blue,
+      items: [
+        "Ultra-fast lookups by key",
+        "Hash map-like structure",
+        "In-memory or persistent",
+        "Session caching, state storage"
+      ]
+    },
+    {
+      title: "Document Stores",
+      icon: "📄",
+      color: colors.purple,
+      items: [
+        "Nested JSON-like documents",
+        "Flexible schema evolution",
+        "No joins (denormalized)",
+        "MongoDB, Couchbase, DynamoDB"
+      ]
+    },
+    {
+      title: "Wide-Column",
+      icon: "📊",
+      color: colors.green,
+      items: [
+        "Petabyte-scale data",
+        "Millions of requests/sec",
+        "Sub-10ms latency",
+        "Cassandra, HBase, Bigtable"
+      ]
+    },
+    {
+      title: "Graph Databases",
+      icon: "🕸️",
+      color: colors.orange,
+      items: [
+        "Nodes and edges",
+        "Relationship traversals",
+        "Social networks, fraud",
+        "Neo4j, Neptune, TigerGraph"
+      ]
+    },
+    {
+      title: "Search Databases",
+      icon: "🔍",
+      color: colors.blue,
+      items: [
+        "Full-text search",
+        "Log analysis",
+        "Fuzzy matching",
+        "Elasticsearch, Solr, Algolia"
+      ]
+    },
+    {
+      title: "Time-Series",
+      icon: "📈",
+      color: colors.purple,
+      items: [
+        "Time-stamped data",
+        "IoT, metrics, logs",
+        "Write-heavy workloads",
+        "InfluxDB, TimescaleDB, Druid"
+      ]
+    }
+  ]}
+/>
+
+**Document Store Deep Dive:**
+
+<DiagramContainer title="Document Database Structure">
+  <Column gap="md">
+    <Box color={colors.purple} variant="filled" size="lg">Users Collection</Box>
+    <Row gap="md">
+      <Column gap="xs">
+        <Box color={colors.blue} variant="outlined">Document 1</Box>
+        <Box color={colors.slate} variant="subtle" size="sm">id: 1234</Box>
+        <Box color={colors.slate} variant="subtle" size="sm">name: {`{first: "Joe", last: "Reis"}`}</Box>
+        <Box color={colors.slate} variant="subtle" size="sm">bands: ["AC/DC", "Slayer"]</Box>
+      </Column>
+      <Column gap="xs">
+        <Box color={colors.green} variant="outlined">Document 2</Box>
+        <Box color={colors.slate} variant="subtle" size="sm">id: 1235</Box>
+        <Box color={colors.slate} variant="subtle" size="sm">name: {`{first: "Matt", last: "H"}`}</Box>
+        <Box color={colors.slate} variant="subtle" size="sm">bands: ["DMB", "Creed"]</Box>
+      </Column>
+    </Row>
+    <Box color={colors.orange} variant="subtle">
+      Each document can have different schemas. No joins - data is denormalized within documents.
+    </Box>
+  </Column>
+</DiagramContainer>
+
+:::warning
+Document databases are generally NOT ACID compliant and often use eventual consistency. Understanding the consistency model is critical to preventing catastrophes when data is distributed across a cluster.
+:::
+
+**Graph Database Example:**
+
+<DiagramContainer title="Social Network Graph Structure">
+  <Column gap="md">
+    <Row gap="lg">
+      <Box color={colors.blue} icon="👤" size="lg">User 1</Box>
+      <Arrow direction="right" label="follows" />
+      <Box color={colors.green} icon="👤" size="lg">User 2</Box>
+    </Row>
+    <Row gap="lg">
+      <Box color={colors.blue} variant="subtle" size="sm">Node: Properties</Box>
+      <Box color={colors.green} variant="subtle" size="sm">Edge: Relationship</Box>
+    </Row>
+    <Box color={colors.orange} variant="subtle">
+      Optimized for connectivity queries: "How many users can be reached in 2 hops?" Graph databases excel at these traversals.
+    </Box>
+  </Column>
+</DiagramContainer>
+
+> **Insight**
+>
+> Data engineers must choose whether to: (1) Map graph data into relational/document paradigms, (2) Analyze within the source system, or (3) Adopt graph-specific analytics tools. The choice depends on analytics use cases and query patterns.
+
+### 4.2. APIs
+
+APIs are now standard for exchanging data in the cloud, SaaS platforms, and internal company systems. While many API types exist, we focus on HTTP-based APIs, the most popular on the web.
+
+#### REST (Representational State Transfer)
+
+**In plain English:** REST is like a standardized set of request forms - you use GET to retrieve information, POST to create new things, PUT to update existing things, and DELETE to remove things. Each request is independent with no memory of previous requests.
+
+**In technical terms:** REST is a set of practices and philosophies for building HTTP web APIs laid out by Roy Fielding in 2000. Built around HTTP verbs (GET, PUT, POST, DELETE), REST interactions are stateless - each call is independent.
+
+**Why it matters:** Despite its vagueness as a specification, REST is the dominant API paradigm. Understanding REST patterns, client libraries, and data synchronization strategies is essential for data engineers building API integrations.
+
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "REST Principles",
+      icon: "📋",
+      color: colors.blue,
+      items: [
+        "Stateless interactions",
+        "HTTP verbs (GET, POST, PUT, DELETE)",
+        "Resource-based URLs",
+        "Standard response codes"
+      ]
+    },
+    {
+      title: "Challenges for Data Engineers",
+      icon: "⚠️",
+      color: colors.orange,
+      items: [
+        "Not a full specification",
+        "Wide variation in abstraction levels",
+        "Requires domain knowledge",
+        "Custom code often needed"
+      ]
+    }
+  ]}
+/>
+
+**Modern Simplifications:**
+
+1. **Client Libraries:** Providers supply Python/JavaScript libraries handling authentication and boilerplate
+2. **Off-the-Shelf Connectors:** SaaS and open-source vendors provide pre-built API connectors
+3. **Custom Connector Platforms:** Tools to build custom connectors with less code
+
+:::caution
+Despite modern tools, low-level plumbing tasks still consume significant resources. At virtually any large company, data engineers need to write and maintain custom code for pulling data from APIs.
+:::
 
 #### GraphQL
 
-GraphQL was created at Facebook as a query language for application data and an alternative to generic REST APIs. Whereas REST APIs generally restrict your queries to a specific data model, GraphQL opens up the possibility of retrieving multiple data models in a single request. This allows for more flexible and expressive queries than with REST. GraphQL is built around JSON and returns data in a shape resembling the JSON query.
+**In plain English:** GraphQL is like ordering a custom meal where you specify exactly what ingredients you want, versus REST where you get a pre-set meal. You can fetch multiple related data types in a single request instead of making multiple API calls.
 
-There's something of a holy war between REST and GraphQL, with some engineering teams partisans of one or the other and some using both. In reality, engineers will encounter both as they interact with source systems.
+**In technical terms:** GraphQL is a query language created at Facebook as an alternative to generic REST APIs. It allows retrieving multiple data models in a single request with more flexible and expressive queries than REST, built around JSON with responses matching query shape.
+
+**Why it matters:** The REST vs GraphQL debate is ongoing, but engineers will encounter both. GraphQL's flexibility can reduce API calls but requires understanding its query language and complexity trade-offs.
 
 #### Webhooks
 
-Webhooks are a simple event-based data-transmission pattern. The data source can be an application backend, a web page, or a mobile app. When specified events happen in the source system, this triggers a call to an HTTP endpoint hosted by the data consumer. Notice that the connection goes from the source system to the data sink, the opposite of typical APIs. For this reason, webhooks are often called reverse APIs.
+**In plain English:** Webhooks are reverse APIs - instead of you calling to ask "got any new data?" the source system calls you when something happens, like a doorbell notifying you when someone arrives.
 
-The endpoint can do various things with the POST event data, potentially triggering a downstream process or storing the data for future use. For analytics purposes, we're interested in collecting these events. Engineers commonly use message queues to ingest data at high velocity and volume.
+**In technical terms:** Webhooks are event-based data-transmission patterns. When specified events happen in the source system, they trigger HTTP endpoint calls hosted by the data consumer. Connection flows from source to sink (opposite of typical APIs).
 
-#### RPC and gRPC
+**Why it matters:** Webhooks enable real-time data collection without polling. Engineers commonly use message queues to ingest webhook data at high velocity and volume.
 
-A remote procedure call (RPC) is commonly used in distributed computing. It allows you to run a procedure on a remote system.
+#### gRPC
 
-gRPC is a remote procedure call library developed internally at Google in 2015 and later released as an open standard. Its use at Google alone would be enough to merit inclusion in our discussion. Many Google services, such as Google Ads and GCP, offer gRPC APIs. gRPC is built around the Protocol Buffers open data serialization standard, also developed by Google.
+**In plain English:** gRPC is Google's high-efficiency communication protocol - think of it as a turbo-charged API format optimized for speed, low power consumption, and structured data exchange.
 
-gRPC emphasizes the efficient bidirectional exchange of data over HTTP/2. Efficiency refers to aspects such as CPU utilization, power consumption, battery life, and bandwidth. Like GraphQL, gRPC imposes much more specific technical standards than REST, thus allowing the use of common client libraries and allowing engineers to develop a skill set that will apply to any gRPC interaction code.
+**In technical terms:** gRPC is a remote procedure call library developed by Google, built around Protocol Buffers for data serialization. It emphasizes efficient bidirectional exchange over HTTP/2, with much more specific technical standards than REST.
 
-### Data Sharing
+**Why it matters:** Many Google services (Google Ads, GCP) offer gRPC APIs. Its standardization allows common client libraries and transferable engineering skills across gRPC implementations.
 
-The core concept of cloud data sharing is that a multitenant system supports security policies for sharing data among tenants. Concretely, any public cloud object storage system with a fine-grained permission system can be a platform for data sharing. Popular cloud data-warehouse platforms also support data-sharing capabilities. Of course, data can also be shared through download or exchange over email, but a multitenant system makes the process much easier.
+### 4.3. Data Sharing
 
-Many modern sharing platforms (especially cloud data warehouses) support row, column, and sensitive data filtering. Data sharing also streamlines the notion of the data marketplace, available on several popular clouds and data platforms. Data marketplaces provide a centralized location for data commerce, where data providers can advertise their offerings and sell them without worrying about the details of managing network access to data systems.
+**In plain English:** Data sharing is like giving your roommate a key to specific cabinets in your house - you control exactly what they can access while both of you share the same infrastructure, with fine-grained permissions keeping things secure.
 
-Data sharing can also streamline data pipelines within an organization. Data sharing allows units of an organization to manage their data and selectively share it with other units while still allowing individual units to manage their compute and query costs separately, facilitating data decentralization. This facilitates decentralized data management patterns such as data mesh.
+**In technical terms:** Cloud data sharing allows multitenant systems to support security policies for sharing data among tenants. Public cloud object storage with fine-grained permissions or cloud data warehouses enable secure, efficient data sharing without data movement.
 
-Data sharing and data mesh align closely with our philosophy of common architecture components. Choose common components that allow the simple and efficient interchange of data and expertise rather than embracing the most exciting and sophisticated technology.
+**Why it matters:** Data sharing streamlines data pipelines, enables data marketplaces, and facilitates decentralized patterns like data mesh. It's more efficient than downloading or emailing data.
 
-### Third-Party Data Sources
+<DiagramContainer title="Data Sharing Architecture">
+  <Column gap="md">
+    <Box color={colors.blue} variant="filled" size="lg" icon="☁️">
+      Cloud Data Platform (Multitenant)
+    </Box>
+    <Row gap="md">
+      <Column gap="sm">
+        <Box color={colors.green} icon="🏢">Organization A</Box>
+        <Box color={colors.green} variant="outlined" size="sm">Owns Data</Box>
+        <Box color={colors.green} variant="outlined" size="sm">Sets Permissions</Box>
+      </Column>
+      <Arrow direction="right" label="Secure Share" />
+      <Column gap="sm">
+        <Box color={colors.purple} icon="🏢">Organization B</Box>
+        <Box color={colors.purple} variant="outlined" size="sm">Access Granted</Box>
+        <Box color={colors.purple} variant="outlined" size="sm">Queries Directly</Box>
+      </Column>
+    </Row>
+    <Box color={colors.orange} variant="subtle">
+      No data movement, no copying - Organization B queries Organization A's data in place with row/column filtering
+    </Box>
+  </Column>
+</DiagramContainer>
 
-The consumerization of technology means every company is essentially now a technology company. The consequence is that these companies—and increasingly government agencies—want to make their data available to their customers and users, either as part of their service or as a separate subscription. For example, the US Bureau of Labor Statistics publishes various statistics about the US labor market. The National Aeronautics and Space Administration (NASA) publishes various data from its research initiatives. Facebook shares data with businesses that advertise on its platform.
+**Data Sharing Capabilities:**
 
-Why would companies want to make their data available? Data is sticky, and a flywheel is created by allowing users to integrate and extend their application into a user's application. Greater user adoption and usage means more data, which means users can integrate more data into their applications and data systems. The side effect is there are now almost infinite sources of third-party data.
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Security Features",
+      icon: "🔒",
+      color: colors.blue,
+      items: [
+        "Row-level filtering",
+        "Column-level filtering",
+        "Sensitive data masking",
+        "Time-limited access"
+      ]
+    },
+    {
+      title: "Use Cases",
+      icon: "🎯",
+      color: colors.purple,
+      items: [
+        "Data marketplaces",
+        "Partner data exchange",
+        "Internal data mesh",
+        "Decentralized ownership"
+      ]
+    }
+  ]}
+/>
 
-Direct third-party data access is commonly done via APIs, through data sharing on a cloud platform, or through data download. APIs often provide deep integration capabilities, allowing customers to pull and push data. For example, many CRMs offer APIs that their users can integrate into their systems and applications. We see a common workflow to get data from a CRM, blend the CRM data through the customer scoring model, and then use reverse ETL to send that data back into CRM for salespeople to contact better-qualified leads.
+### 4.4. Third-Party Data Sources
 
-### Message Queues and Event-Streaming Platforms
+**In plain English:** Third-party data is like subscribing to a newspaper or weather service - companies make their data available to customers either as part of their service or as a separate subscription, creating a flywheel of data integration and usage.
 
-Event-driven architectures are pervasive in software applications and are poised to grow their popularity even further. First, message queues and event-streaming platforms—critical layers in event-driven architectures—are easier to set up and manage in a cloud environment. Second, the rise of data apps—applications that directly integrate real-time analytics—are growing from strength to strength. Event-driven architectures are ideal in this setting because events can both trigger work in the application and feed near real-time analytics.
+**In technical terms:** The consumerization of technology means companies and government agencies increasingly make data available to customers via APIs, data sharing platforms, or direct download. This creates integration opportunities and data network effects.
 
-Please note that streaming data (in this case, messages and streams) cuts across many data engineering lifecycle stages. Unlike an RDBMS, which is often directly attached to an application, the lines of streaming data are sometimes less clear-cut. These systems are used as source systems, but they will often cut across the data engineering lifecycle because of their transient nature. For example, you can use an event-streaming platform for message passing in an event-driven application, a source system. The same event-streaming platform can be used in the ingestion and transformation stage to process data for real-time analytics.
+**Why it matters:** Third-party data sources are now nearly infinite. Understanding how to access and integrate them (APIs, data sharing, downloads) is crucial. Reverse ETL patterns (pushing scored data back to CRMs) are increasingly common.
 
-As source systems, message queues and event-streaming platforms are used in numerous ways, from routing messages between microservices ingesting millions of events per second of event data from web, mobile, and IoT applications. Let's look at message queues and event-streaming platforms a bit more closely.
+**Common Access Patterns:**
 
-#### Message queues
+<ProcessFlow
+  direction="vertical"
+  steps={[
+    {
+      title: "API Access",
+      description: "Pull and push data via REST/GraphQL APIs",
+      icon: "🔌",
+      color: colors.blue
+    },
+    {
+      title: "Cloud Data Sharing",
+      description: "Direct access via platform sharing",
+      icon: "☁️",
+      color: colors.purple
+    },
+    {
+      title: "File Download",
+      description: "Download CSV, Excel, JSON files",
+      icon: "📥",
+      color: colors.green
+    },
+    {
+      title: "Reverse ETL",
+      description: "Send enriched data back to source",
+      icon: "🔄",
+      color: colors.orange
+    }
+  ]}
+/>
 
-A message queue is a mechanism to asynchronously send data (usually as small individual messages, in the kilobytes) between discrete systems using a publish and subscribe model. Data is published to a message queue and is delivered to one or more subscribers. The subscriber acknowledges receipt of the message, removing it from the queue.
+**Example Workflow:**
 
-Message queues allow applications and systems to be decoupled from each other and are widely used in microservices architectures. The message queue buffers messages to handle transient load spikes and makes messages durable through a distributed architecture with replication.
+1. **Extract:** Pull customer data from CRM via API
+2. **Transform:** Run ML scoring model on customer data
+3. **Load:** Store results in data warehouse
+4. **Reverse ETL:** Push scored leads back to CRM for sales team
 
-Message queues are a critical ingredient for decoupled microservices and event-driven architectures. Some things to keep in mind with message queues are frequency of delivery, message ordering, and scalability.
+### 4.5. Message Queues and Event-Streaming Platforms
 
-**Message ordering and delivery**
-The order in which messages are created, sent, and received can significantly impact downstream subscribers. In general, order in distributed message queues is a tricky problem. Message queues often apply a fuzzy notion of order and first in, first out (FIFO). Strict FIFO means that if message A is ingested before message B, message A will always be delivered before message B. In practice, messages might be published and received out of order, especially in highly distributed message systems.
+**In plain English:** Message queues and streaming platforms are like the postal service for your applications - they reliably deliver messages between services, buffer when systems get backed up, and (in the case of streams) keep a record you can replay.
 
-In general, don't assume that your messages will be delivered in order unless your message queue technology guarantees it. You typically need to design for out-of-order message delivery.
+**In technical terms:** Event-driven architectures leverage message queues for asynchronous communication and event-streaming platforms for ordered, persistent event logs. These systems enable decoupled microservices and real-time analytics.
 
-**Delivery frequency**
-Messages can be sent exactly once or at least once. If a message is sent exactly once, then after the subscriber acknowledges the message, the message disappears and won't be delivered again. Messages sent at least once can be consumed by multiple subscribers or by the same subscriber more than once. This is great when duplications or redundancy don't matter.
+**Why it matters:** Event-driven architectures are growing rapidly. Message queues and streaming platforms are easier to manage in the cloud, and data apps increasingly integrate real-time analytics. These systems cut across many data engineering lifecycle stages.
 
-Ideally, systems should be idempotent. In an idempotent system, the outcome of processing a message once is identical to the outcome of processing it multiple times. This helps to account for a variety of subtle scenarios.
+#### Message Queues
 
-**Scalability**
-The most popular message queues utilized in event-driven applications are horizontally scalable, running across multiple servers. This allows these queues to scale up and down dynamically, buffer messages when systems fall behind, and durably store messages for resilience against failure. However, this can create a variety of complications, as mentioned previously (multiple deliveries and fuzzy ordering).
+<DiagramContainer title="Message Queue Architecture">
+  <ProcessFlow
+    direction="horizontal"
+    steps={[
+      {
+        title: "Publisher",
+        description: "Produces messages",
+        icon: "📤",
+        color: colors.blue
+      },
+      {
+        title: "Message Queue",
+        description: "Buffers, routes messages",
+        icon: "📨",
+        color: colors.purple
+      },
+      {
+        title: "Subscriber",
+        description: "Consumes and acknowledges",
+        icon: "📥",
+        color: colors.green
+      },
+      {
+        title: "Removed",
+        description: "Message deleted after ack",
+        icon: "🗑️",
+        color: colors.orange
+      }
+    ]}
+  />
+</DiagramContainer>
 
-#### Event-streaming platforms
+**Key Message Queue Considerations:**
 
-In some ways, an event-streaming platform is a continuation of a message queue in that messages are passed from producers to consumers. The big difference between messages and streams is that a message queue is primarily used to route messages with certain delivery guarantees. In contrast, an event-streaming platform is used to ingest and process data in an ordered log of records. In an event-streaming platform, data is retained for a while, and it is possible to replay messages from a past point in time.
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Message Ordering",
+      icon: "🔢",
+      color: colors.blue,
+      items: [
+        "FIFO: Strict ordering",
+        "Best-effort: Fuzzy ordering",
+        "Out-of-order delivery possible",
+        "Design for disorder"
+      ]
+    },
+    {
+      title: "Delivery Frequency",
+      icon: "📬",
+      color: colors.purple,
+      items: [
+        "Exactly once (ideal)",
+        "At least once (duplicates)",
+        "Design for idempotency",
+        "Handle retry scenarios"
+      ]
+    },
+    {
+      title: "Scalability",
+      icon: "📈",
+      color: colors.green,
+      items: [
+        "Horizontal scaling",
+        "Dynamic scale up/down",
+        "Buffer transient spikes",
+        "Distributed architecture"
+      ]
+    }
+  ]}
+/>
 
-An event is "something that happened, typically a change in the state of something." An event has the following features: a key, a value, and a timestamp. Multiple key-value timestamps might be contained in a single event.
+:::warning
+Don't assume messages will be delivered in order unless your message queue technology guarantees it. You typically need to design for out-of-order message delivery.
+:::
 
-Let's look at some of the critical characteristics of an event-streaming platform that you should be aware of as a data engineer.
+#### Event-Streaming Platforms
 
-**Topics**
-In an event-streaming platform, a producer streams events to a topic, a collection of related events. A topic might contain fraud alerts, customer orders, or temperature readings from IoT devices, for example. A topic can have zero, one, or multiple producers and customers on most event-streaming platforms.
+<DiagramContainer title="Event-Streaming Platform Architecture">
+  <Column gap="md">
+    <Row gap="md">
+      <Box color={colors.blue} icon="📤">Producers</Box>
+      <Arrow direction="right" />
+      <Box color={colors.purple} icon="📊" size="lg">Topic: Web Orders</Box>
+      <Arrow direction="right" />
+      <Column gap="xs">
+        <Box color={colors.green} variant="outlined" size="sm">Consumer: Fulfillment</Box>
+        <Box color={colors.green} variant="outlined" size="sm">Consumer: Marketing</Box>
+      </Column>
+    </Row>
+    <Box color={colors.orange} variant="subtle">
+      Events retained for weeks/months. Multiple consumers can replay from any point in time.
+    </Box>
+  </Column>
+</DiagramContainer>
 
-**Stream partitions**
-Stream partitions are subdivisions of a stream into multiple streams. A good analogy is a multilane freeway. Having multiple lanes allows for parallelism and higher throughput. Messages are distributed across partitions by partition key. Messages with the same partition key will always end up in the same partition.
+**Event-Streaming Platform Characteristics:**
 
-Set a partition key so that messages that should be processed together have the same partition key. For example, it is common in IoT settings to want to send all messages from a particular device to the same processing server. We can achieve this by using a device ID as the partition key, and then setting up one server to consume from each partition.
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Topics",
+      icon: "📚",
+      color: colors.blue,
+      items: [
+        "Collection of related events",
+        "Fraud alerts, orders, IoT readings",
+        "Zero, one, or multiple producers",
+        "Zero, one, or multiple consumers"
+      ]
+    },
+    {
+      title: "Stream Partitions",
+      icon: "🛣️",
+      color: colors.purple,
+      items: [
+        "Subdivisions for parallelism",
+        "Partition key determines routing",
+        "Same key → same partition",
+        "Avoid hotspotting"
+      ]
+    },
+    {
+      title: "Fault Tolerance",
+      icon: "🛡️",
+      color: colors.green,
+      items: [
+        "Distributed across nodes",
+        "Node failure → replacement",
+        "Records not lost",
+        "Durable, reliable storage"
+      ]
+    }
+  ]}
+/>
 
-A key concern with stream partitioning is ensuring that your partition key does not generate hotspotting—a disproportionate number of messages delivered to one partition. Ensure that your partition key will distribute messages evenly across partitions.
+**Stream Partitioning Example:**
 
-**Fault tolerance and resilience**
-Event-streaming platforms are typically distributed systems, with streams stored on various nodes. If a node goes down, another node replaces it, and the stream is still accessible. This means records aren't lost; you may choose to delete records, but that's another story. This fault tolerance and resilience make streaming platforms a good choice when you need a system that can reliably produce, store, and ingest event data.
+<DiagramContainer title="Stream Partitioning by Key">
+  <Column gap="md">
+    <Box color={colors.blue} variant="filled">Incoming Message Stream</Box>
+    <Box color={colors.slate} variant="subtle" size="sm">Messages with numeric IDs, partitioned by ID % 3</Box>
+    <Row gap="md">
+      <Box color={colors.green} variant="outlined">Partition 0 (Remainder 0)</Box>
+      <Box color={colors.purple} variant="outlined">Partition 1 (Remainder 1)</Box>
+      <Box color={colors.orange} variant="outlined">Partition 2 (Remainder 2)</Box>
+    </Row>
+    <Box color={colors.orange} variant="subtle">
+      Partition keys enable parallelism and ensure related messages go to the same partition
+    </Box>
+  </Column>
+</DiagramContainer>
 
-## Whom You'll Work With
+---
 
-When accessing source systems, it's essential to understand the people with whom you'll work. In our experience, good diplomacy and relationships with the stakeholders of source systems are an underrated and crucial part of successful data engineering.
+## 5. Whom You'll Work With
 
-Who are these stakeholders? Typically, you'll deal with two categories of stakeholders: systems and data stakeholders. A systems stakeholder builds and maintains the source systems; these might be software engineers, application developers, and third parties. Data stakeholders own and control access to the data you want, generally handled by IT, a data governance group, or third parties. The systems and data stakeholders are often different people or teams; sometimes, they are the same.
+**In plain English:** Working with source systems is like being a diplomat - you need good relationships with two groups: the builders who maintain the systems (software engineers) and the owners who control access to the data (IT, governance teams).
 
-You're often at the mercy of the stakeholder's ability to follow correct software engineering, database management, and development practices. Ideally, the stakeholders are doing DevOps and working in an agile manner. We suggest creating a feedback loop between data engineers and stakeholders of the source systems to create awareness of how data is consumed and used. This is among the single most overlooked areas where data engineers can get a lot of value. When something happens to the upstream source data—and something will happen, whether it's a schema or data change, a failed server or database, or other important events—you want to make sure that you're made aware of the impact these issues will have on your data engineering systems.
+**In technical terms:** Source system stakeholders include systems stakeholders (builders and maintainers) and data stakeholders (owners who control access). These groups are often different, sometimes the same, but both are critical to successful data engineering.
 
-It might help to have a data contract in place with your upstream source system owners. What is a data contract? James Denmore offers this definition:
+**Why it matters:** Good diplomacy and relationships with source system stakeholders are underrated but crucial. Creating feedback loops, data contracts, and SLAs ensures you're notified of changes that affect your pipelines.
 
-> A data contract is a written agreement between the owner of a source system and the team ingesting data from that system for use in a data pipeline. The contract should state what data is being extracted, via what method (full, incremental), how often, as well as who (person, team) are the contacts for both the source system and the ingestion. Data contracts should be stored in a well-known and easy-to-find location such as a GitHub repo or internal documentation site. If possible, format data contracts in a standardized form so they can be integrated into the development process or queried programmatically.
+<DiagramContainer title="Source System Stakeholders">
+  <Row gap="lg">
+    <Column gap="sm" align="center">
+      <Box color={colors.blue} icon="👨‍💻" size="lg">Systems Stakeholders</Box>
+      <Box color={colors.slate} variant="subtle">Build and maintain systems</Box>
+      <Column gap="xs">
+        <Box color={colors.blue} variant="outlined" size="sm">Software engineers</Box>
+        <Box color={colors.blue} variant="outlined" size="sm">Application developers</Box>
+        <Box color={colors.blue} variant="outlined" size="sm">Third-party vendors</Box>
+      </Column>
+    </Column>
+    <Column gap="sm" align="center">
+      <Box color={colors.purple} icon="🔒" size="lg">Data Stakeholders</Box>
+      <Box color={colors.slate} variant="subtle">Own and control data access</Box>
+      <Column gap="xs">
+        <Box color={colors.purple} variant="outlined" size="sm">IT teams</Box>
+        <Box color={colors.purple} variant="outlined" size="sm">Data governance</Box>
+        <Box color={colors.purple} variant="outlined" size="sm">Third-party providers</Box>
+      </Column>
+    </Column>
+  </Row>
+</DiagramContainer>
 
-In addition, consider establishing an SLA with upstream providers. An SLA provides expectations of what you can expect from the source systems you rely upon. An example of an SLA might be "data from source systems will be reliably available and of high quality." A service-level objective (SLO) measures performance against what you've agreed to in the SLA. For example, given your example SLA, an SLO might be "source systems will have 99% uptime." If a data contract or SLA/SLO seems too formal, at least verbally set expectations for source system guarantees for uptime, data quality, and anything else of importance to you. Upstream owners of source systems need to understand your requirements so they can provide you with the data you need.
+### Data Contracts
 
-## Undercurrents and Their Impact on Source Systems
+**What is a Data Contract?**
 
-Unlike other parts of the data engineering lifecycle, source systems are generally outside the control of the data engineer. There's an implicit assumption (some might call it hope) that the stakeholders and owners of the source systems—and the data they produce—are following best practices concerning data management, DataOps (and DevOps), data architecture, orchestration, and software engineering. The data engineer should get as much upstream support as possible to ensure that the undercurrents are applied when data is generated in source systems. Doing so will make the rest of the steps in the data engineering lifecycle proceed a lot more smoothly.
+> A data contract is a written agreement between the owner of a source system and the team ingesting data from that system for use in a data pipeline.
 
-How do the undercurrents impact source systems? Let's have a look.
+**Data Contract Contents:**
+
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Technical Details",
+      icon: "⚙️",
+      color: colors.blue,
+      items: [
+        "What data is extracted",
+        "Extraction method (full, incremental)",
+        "Frequency and schedule",
+        "Schema and format specifications"
+      ]
+    },
+    {
+      title: "Organizational Details",
+      icon: "👥",
+      color: colors.purple,
+      items: [
+        "Source system contacts",
+        "Ingestion team contacts",
+        "SLA and SLO agreements",
+        "Change notification process"
+      ]
+    }
+  ]}
+/>
+
+### SLA and SLO
+
+<ComparisonTable
+  beforeTitle="SLA (Service Level Agreement)"
+  afterTitle="SLO (Service Level Objective)"
+  beforeColor={colors.blue}
+  afterColor={colors.green}
+  items={[
+    {
+      label: "Definition",
+      before: "Agreement on service expectations",
+      after: "Measurable performance metrics"
+    },
+    {
+      label: "Example",
+      before: "Data will be reliably available and high quality",
+      after: "Source systems will have 99% uptime"
+    },
+    {
+      label: "Purpose",
+      before: "Sets expectations",
+      after: "Measures against SLA"
+    },
+    {
+      label: "Format",
+      before: "Qualitative commitments",
+      after: "Quantitative targets"
+    }
+  ]}
+/>
+
+> **Insight**
+>
+> Create a feedback loop between data engineers and source system stakeholders. This is among the single most overlooked areas where data engineers can get tremendous value. When schema changes, servers fail, or data quality issues occur, you want to be notified immediately.
+
+---
+
+## 6. Undercurrents and Their Impact on Source Systems
+
+**In plain English:** Unlike other parts of data engineering, you don't control source systems - you can only hope their owners follow best practices. Your job is to work with stakeholders to ensure security, data management, DataOps, architecture, orchestration, and software engineering principles are applied upstream.
+
+**In technical terms:** Source systems are generally outside the data engineer's control. The stakeholders and owners should follow best practices for the undercurrents. Data engineers should secure upstream support to ensure undercurrents are applied when data is generated.
+
+**Why it matters:** How undercurrents are applied in source systems directly impacts the rest of your data engineering lifecycle. Getting upstream support makes downstream work dramatically smoother.
 
 ### Security
 
-Security is critical, and the last thing you want is to accidentally create a point of vulnerability in a source system. Here are some areas to consider:
-
-- Is the source system architected so data is secure and encrypted, both with data at rest and while data is transmitted?
-- Do you have to access the source system over the public internet, or are you using a virtual private network (VPN)?
-- Keep passwords, tokens, and credentials to the source system securely locked away. For example, if you're using Secure Shell (SSH) keys, use a key manager to protect your keys; the same rule applies to passwords—use a password manager or a single sign-on (SSO) provider.
-- Do you trust the source system? Always be sure to trust but verify that the source system is legitimate. You don't want to be on the receiving end of data from a malicious actor.
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Data Protection",
+      icon: "🔒",
+      color: colors.blue,
+      items: [
+        "Data encrypted at rest and in transit",
+        "Secure network access (VPN vs public internet)",
+        "Password/token management (key managers, SSO)",
+        "Trust and verification of sources"
+      ]
+    },
+    {
+      title: "Critical Questions",
+      icon: "❓",
+      color: colors.purple,
+      items: [
+        "Is source system architected securely?",
+        "Are you accessing over secure networks?",
+        "Are credentials properly managed?",
+        "Do you trust the source system?"
+      ]
+    }
+  ]}
+/>
 
 ### Data Management
 
-Data management of source systems is challenging for data engineers. In most cases, you will have only peripheral control—if any control at all—over source systems and the data they produce. To the extent possible, you should understand the way data is managed in source systems since this will directly influence how you ingest, store, and transform the data.
-
-Here are some areas to consider:
-
-**Data governance**
-Are upstream data and systems governed in a reliable, easy-to-understand fashion? Who manages the data?
-
-**Data quality**
-How do you ensure data quality and integrity in upstream systems? Work with source system teams to set expectations on data and communication.
-
-**Schema**
-Expect that upstream schemas will change. Where possible, collaborate with source system teams to be notified of looming schema changes.
-
-**Master data management**
-Is the creation of upstream records controlled by a master data management practice or system?
-
-**Privacy and ethics**
-Do you have access to raw data, or will the data be obfuscated? What are the implications of the source data? How long is it retained? Does it shift locations based on retention policies?
-
-**Regulatory**
-Based upon regulations, are you supposed to access the data?
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Governance",
+      icon: "📋",
+      color: colors.blue,
+      items: [
+        "Who manages the data?",
+        "Reliable governance practices",
+        "Clear ownership",
+        "Access policies"
+      ]
+    },
+    {
+      title: "Quality and Schema",
+      icon: "✅",
+      color: colors.purple,
+      items: [
+        "Data quality expectations",
+        "Schema change notifications",
+        "Upstream communication",
+        "Master data management"
+      ]
+    },
+    {
+      title: "Privacy and Compliance",
+      icon: "🛡️",
+      color: colors.green,
+      items: [
+        "Data obfuscation requirements",
+        "Retention policies",
+        "Regulatory compliance",
+        "Ethical considerations"
+      ]
+    }
+  ]}
+/>
 
 ### DataOps
 
-Operational excellence—DevOps, DataOps, MLOps, XOps—should extend up and down the entire stack and support the data engineering lifecycle. While this is ideal, it's often not fully realized.
+**In plain English:** DataOps should extend up and down the entire stack. Work with source system teams to ensure you can observe, monitor, and respond to incidents. Set up clear communication so you know when systems go down or need rescaling.
 
-Because you're working with stakeholders who control both the source systems and the data they produce, you need to ensure that you can observe and monitor the uptime and usage of the source systems and respond when incidents occur. For example, when the application database you depend on for CDC exceeds its I/O capacity and needs to be rescaled, how will that affect your ability to receive data from this system? Will you be able to access the data, or will it be unavailable until the database is rescaled? How will this affect reports?
+**In technical terms:** Operational excellence (DevOps, DataOps, MLOps) should support the entire data engineering lifecycle. Data engineers must weave themselves into the DevOps practices of source system stakeholders and vice versa.
 
-Set up a clear communication chain between data engineering and the teams supporting the source systems. Ideally, these stakeholder teams have incorporated DevOps into their workflow and culture. This will go a long way to accomplishing the goals of DataOps (a sibling of DevOps), to address and reduce errors quickly. Data engineers need to weave themselves into the DevOps practices of stakeholders, and vice versa. Successful DataOps works when all people are on board and focus on making systems holistically work.
+**Why it matters:** When source systems exceed capacity, fail, or change, your data pipelines are affected. Clear communication and integrated monitoring prevent surprises and enable rapid incident response.
 
-A few DataOps considerations are as follows:
-
-**Automation**
-There's the automation impacting the source system, such as code updates and new features. Then there's the DataOps automation that you've set up for your data workflows. Does an issue in the source system's automation impact your data workflow automation? If so, consider decoupling these systems so they can perform automation independently.
-
-**Observability**
-How will you know when there's an issue with a source system, such as an outage or a data-quality issue? Set up monitoring for source system uptime (or use the monitoring created by the team that owns the source system). Set up checks to ensure that data from the source system conforms with expectations for downstream usage.
-
-**Incident response**
-What's your plan if something bad happens? For example, how will your data pipeline behave if a source system goes offline? What's your plan to backfill the "lost" data once the source system is back online?
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Automation",
+      icon: "🤖",
+      color: colors.blue,
+      items: [
+        "Source system automation (CI/CD)",
+        "Data workflow automation",
+        "Decoupling considerations",
+        "Independent operation capability"
+      ]
+    },
+    {
+      title: "Observability",
+      icon: "👁️",
+      color: colors.purple,
+      items: [
+        "Source system uptime monitoring",
+        "Data quality checks",
+        "Schema conformance validation",
+        "Shared monitoring dashboards"
+      ]
+    },
+    {
+      title: "Incident Response",
+      icon: "🚨",
+      color: colors.green,
+      items: [
+        "Outage response plans",
+        "Backfill strategies",
+        "Communication protocols",
+        "Failure scenario planning"
+      ]
+    }
+  ]}
+/>
 
 ### Data Architecture
 
-Similar to data management, unless you're involved in the design and maintenance of the source system architecture, you'll have little impact on the upstream source system architecture. You should also understand how the upstream architecture is designed and its strengths and weaknesses. Talk often with the teams responsible for the source systems to understand the factors discussed in this section and ensure that their systems can meet your expectations. Knowing where the architecture performs well and where it doesn't will impact how you design your data pipeline.
+**Key Architecture Considerations:**
 
-Here are some things to consider regarding source system architectures:
-
-**Reliability**
-All systems suffer from entropy at some point, and outputs will drift from what's expected. Bugs are introduced, and random glitches happen. Does the system produce predictable outputs? How often can we expect the system to fail? What's the mean time to repair to get the system back to sufficient reliability?
-
-**Durability**
-Everything fails. A server might die, a cloud's zone or region could go offline, or other issues may arise. You need to account for how an inevitable failure or outage will affect your managed data systems. How does the source system handle data loss from hardware failures or network outages? What's the plan for handling outages for an extended period and limiting the blast radius of an outage?
-
-**Availability**
-What guarantees that the source system is up, running, and available when it's supposed to be?
-
-**People**
-Who's in charge of the source system's design, and how will you know if breaking changes are made in the architecture? A data engineer needs to work with the teams who maintain the source systems and ensure that these systems are architected reliably. Create an SLA with the source system team to set expectations about potential system failure.
+<ProcessFlow
+  direction="vertical"
+  steps={[
+    {
+      title: "Reliability",
+      description: "Does the system produce predictable outputs? What's the failure rate and MTTR?",
+      icon: "🔄",
+      color: colors.blue
+    },
+    {
+      title: "Durability",
+      description: "How does the system handle hardware failures and network outages?",
+      icon: "💾",
+      color: colors.purple
+    },
+    {
+      title: "Availability",
+      description: "What guarantees that the system is up and running when needed?",
+      icon: "⏱️",
+      color: colors.green
+    },
+    {
+      title: "People",
+      description: "Who's in charge? How will you know about breaking changes?",
+      icon: "👥",
+      color: colors.orange
+    }
+  ]}
+/>
 
 ### Orchestration
 
-When orchestrating within your data engineering workflow, you'll primarily be concerned with making sure your orchestration can access the source system, which requires the correct network access, authentication, and authorization.
-
-Here are some things to think about concerning orchestration for source systems:
-
-**Cadence and frequency**
-Is the data available on a fixed schedule, or can you access new data whenever you want?
-
-**Common frameworks**
-Do the software and data engineers use the same container manager, such as Kubernetes? Would it make sense to integrate application and data workloads into the same Kubernetes cluster? If you're using an orchestration framework like Airflow, does it make sense to integrate it with the upstream application team? There's no correct answer here, but you need to balance the benefits of integration with the risks of tight coupling.
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Access and Authentication",
+      icon: "🔑",
+      color: colors.blue,
+      items: [
+        "Correct network access",
+        "Authentication credentials",
+        "Authorization policies",
+        "Secure connection methods"
+      ]
+    },
+    {
+      title: "Scheduling and Integration",
+      icon: "📅",
+      color: colors.purple,
+      items: [
+        "Data availability cadence",
+        "Fixed schedule vs on-demand",
+        "Common frameworks (Kubernetes, Airflow)",
+        "Balance integration vs coupling"
+      ]
+    }
+  ]}
+/>
 
 ### Software Engineering
 
-As the data landscape shifts to tools that simplify and automate access to source systems, you'll likely need to write code. Here are a few considerations when writing code to access a source system:
+**Code Considerations for Source System Access:**
 
-**Networking**
-Make sure your code will be able to access the network where the source system resides. Also, always think about secure networking. Are you accessing an HTTPS URL over the public internet, SSH, or a VPN?
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Networking",
+      icon: "🌐",
+      color: colors.blue,
+      items: [
+        "Network accessibility",
+        "HTTPS, SSH, VPN",
+        "Secure networking",
+        "Firewall rules"
+      ]
+    },
+    {
+      title: "Authentication",
+      icon: "🔐",
+      color: colors.purple,
+      items: [
+        "Credentials management",
+        "Secrets storage",
+        "IAM roles",
+        "Token rotation"
+      ]
+    },
+    {
+      title: "Access Patterns",
+      icon: "🔌",
+      color: colors.green,
+      items: [
+        "API or database driver",
+        "REST/GraphQL handling",
+        "Pagination strategies",
+        "Retry and timeout logic"
+      ]
+    },
+    {
+      title: "Operations",
+      icon: "⚙️",
+      color: colors.orange,
+      items: [
+        "Orchestration integration",
+        "Parallel access scaling",
+        "Deployment strategies",
+        "Error handling"
+      ]
+    }
+  ]}
+/>
 
-**Authentication and authorization**
-Do you have the proper credentials (tokens, username/passwords) to access the source system? Where will you store these credentials so they don't appear in your code or version control? Do you have the correct IAM roles to perform the coded tasks?
+---
 
-**Access patterns**
-How are you accessing the data? Are you using an API, and how are you handling REST/GraphQL requests, response data volumes, and pagination? If you're accessing data via a database driver, is the driver compatible with the database you're accessing? For either access pattern, how are things like retries and timeouts handled?
+## 7. Conclusion
 
-**Orchestration**
-Does your code integrate with an orchestration framework, and can it be executed as an orchestrated workflow?
+**In plain English:** Source systems are not "someone else's problem" - they're the foundation of your data engineering lifecycle. Treat them carelessly and you risk taking down production. Collaborate well with source system teams and you'll get higher-quality data and better outcomes.
 
-**Parallelization**
-How are you managing and scaling parallel access to source systems?
+**In technical terms:** Source systems and their data are vital in the data engineering lifecycle. Better collaboration with source system teams leads to higher-quality data, more successful outcomes, and better data products. Data engineers must create bidirectional communication flows with stakeholders.
 
-**Deployment**
-How are you handling the deployment of source code changes?
+**Why it matters:** The integration between data engineers and source system teams is growing. Reverse ETL, event-streaming platforms, and shared systems blur the lines. Building user-facing data products requires making application teams stakeholders in data engineering.
 
-## Conclusion
+### Key Takeaways
 
-Source systems and their data are vital in the data engineering lifecycle. Data engineers tend to treat source systems as "someone else's problem"—do this at your peril! Data engineers who abuse source systems may need to look for another job when production goes down.
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Build Relationships",
+      icon: "🤝",
+      color: colors.blue,
+      items: [
+        "Create feedback loops",
+        "Establish data contracts",
+        "Set up SLAs/SLOs",
+        "Communicate proactively"
+      ]
+    },
+    {
+      title: "Understand Systems",
+      icon: "🔍",
+      color: colors.purple,
+      items: [
+        "Read documentation",
+        "Learn system patterns",
+        "Understand quirks",
+        "Know performance limits"
+      ]
+    },
+    {
+      title: "Collaborate for Success",
+      icon: "🎯",
+      color: colors.green,
+      items: [
+        "Notify of schema changes",
+        "Build shared systems",
+        "Create user-facing products",
+        "Share successes"
+      ]
+    }
+  ]}
+/>
 
-If there's a stick, there's also a carrot. Better collaboration with source system teams can lead to higher-quality data, more successful outcomes, and better data products. Create a bidirectional flow of communications with your counterparts on these teams; set up processes to notify of schema and application changes that affect analytics and ML. Communicate your data needs proactively to assist application teams in the data engineering process.
+### Moving Forward
 
-Be aware that the integration between data engineers and source system teams is growing. One example is reverse ETL, which has long lived in the shadows but has recently risen into prominence. We also discussed that the event-streaming platform could serve a role in event-driven architectures and analytics; a source system can also be a data engineering system. Build shared systems where it makes sense to do so.
+<ProcessFlow
+  direction="vertical"
+  steps={[
+    {
+      title: "Document Everything",
+      description: "Data contracts, SLAs, access patterns, contact information",
+      icon: "📝",
+      color: colors.blue
+    },
+    {
+      title: "Monitor Continuously",
+      description: "Uptime, data quality, schema changes, performance metrics",
+      icon: "📊",
+      color: colors.purple
+    },
+    {
+      title: "Communicate Proactively",
+      description: "Notify teams of data needs, changes, and incidents",
+      icon: "💬",
+      color: colors.green
+    },
+    {
+      title: "Build for Change",
+      description: "Expect failures, plan backfills, design for resilience",
+      icon: "🔄",
+      color: colors.orange
+    }
+  ]}
+/>
 
-Look for opportunities to build user-facing data products. Talk to application teams about analytics they would like to present to their users or places where ML could improve the user experience. Make application teams stakeholders in data engineering, and find ways to share your successes.
+> **Insight**
+>
+> Look for opportunities to build user-facing data products. Talk to application teams about analytics they'd like to present to users or where ML could improve user experience. Make application teams stakeholders in data engineering and find ways to share your successes.
 
-Now that you understand the types of source systems and the data they generate, we'll next look at ways to store this data.
+**Next Steps:** Now that you understand source systems and data generation, the next chapter explores how to store this data effectively across various storage systems and architectures.
+
+---
 
 ## Additional Resources
 

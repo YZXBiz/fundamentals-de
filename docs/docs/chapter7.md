@@ -1,663 +1,3198 @@
 ---
 sidebar_position: 8
 title: "Chapter 7: Ingestion"
-description: Learn about data ingestion patterns, key engineering considerations, batch and streaming ingestion, and the technologies and practices that enable moving data from source systems into storage.
+description: "Master data ingestion patterns, batch and streaming considerations, key engineering principles, and the technologies that enable moving data from source systems into storage"
 ---
 
-# Chapter 7. Ingestion
+import {
+  Box, Arrow, Row, Column, Group,
+  DiagramContainer, ProcessFlow, TreeDiagram,
+  CardGrid, StackDiagram, ComparisonTable,
+  colors
+} from '@site/src/components/diagrams';
 
-You've learned about the various source systems you'll likely encounter as a data engineer and about ways to store data. Let's now turn our attention to the patterns and choices that apply to ingesting data from various source systems. In this chapter, we discuss data ingestion, the key engineering considerations for the ingestion phase, the major patterns for batch and streaming ingestion, technologies you'll encounter, whom you'll work with as you develop your data ingestion pipeline, and how the undercurrents feature in the ingestion phase.
+# Chapter 7: Ingestion
+
+> **"The bulk of software engineering is just plumbing."**
+>
+> — Karl Hughes
+
+---
 
 ## Table of Contents
 
-1. [What Is Data Ingestion?](#what-is-data-ingestion)
-2. [Data Pipelines Defined](#data-pipelines-defined)
-3. [Key Engineering Considerations for the Ingestion Phase](#key-engineering-considerations-for-the-ingestion-phase)
-   - [Bounded Versus Unbounded Data](#bounded-versus-unbounded-data)
-   - [Frequency](#frequency)
-   - [Synchronous Versus Asynchronous Ingestion](#synchronous-versus-asynchronous-ingestion)
-   - [Serialization and Deserialization](#serialization-and-deserialization)
-   - [Throughput and Scalability](#throughput-and-scalability)
-   - [Reliability and Durability](#reliability-and-durability)
-   - [Payload](#payload)
-   - [Push Versus Pull Versus Poll Patterns](#push-versus-pull-versus-poll-patterns)
-4. [Batch Ingestion Considerations](#batch-ingestion-considerations)
-   - [Snapshot or Differential Extraction](#snapshot-or-differential-extraction)
-   - [File-Based Export and Ingestion](#file-based-export-and-ingestion)
-   - [ETL Versus ELT](#etl-versus-elt)
-   - [Inserts, Updates, and Batch Size](#inserts-updates-and-batch-size)
-   - [Data Migration](#data-migration)
-5. [Message and Stream Ingestion Considerations](#message-and-stream-ingestion-considerations)
-   - [Schema Evolution](#schema-evolution)
-   - [Late-Arriving Data](#late-arriving-data)
-   - [Ordering and Multiple Delivery](#ordering-and-multiple-delivery)
-   - [Replay](#replay)
-   - [Time to Live](#time-to-live)
-   - [Message Size](#message-size)
-   - [Error Handling and Dead-Letter Queues](#error-handling-and-dead-letter-queues)
-   - [Consumer Pull and Push](#consumer-pull-and-push)
-   - [Location](#location)
-6. [Ways to Ingest Data](#ways-to-ingest-data)
-   - [Direct Database Connection](#direct-database-connection)
-   - [Change Data Capture](#change-data-capture)
-   - [APIs](#apis)
-   - [Message Queues and Event-Streaming Platforms](#message-queues-and-event-streaming-platforms)
-   - [Managed Data Connectors](#managed-data-connectors)
-   - [Moving Data with Object Storage](#moving-data-with-object-storage)
-   - [EDI](#edi)
-   - [Databases and File Export](#databases-and-file-export)
-   - [Practical Issues with Common File Formats](#practical-issues-with-common-file-formats)
-   - [Shell](#shell)
-   - [SSH](#ssh)
-   - [SFTP and SCP](#sftp-and-scp)
-   - [Webhooks](#webhooks)
-   - [Web Interface](#web-interface)
-   - [Web Scraping](#web-scraping)
-   - [Transfer Appliances for Data Migration](#transfer-appliances-for-data-migration)
-   - [Data Sharing](#data-sharing)
-7. [Whom You'll Work With](#whom-youll-work-with)
-   - [Upstream Stakeholders](#upstream-stakeholders)
-   - [Downstream Stakeholders](#downstream-stakeholders)
-8. [Undercurrents](#undercurrents)
-   - [Security](#security)
-   - [Data Management](#data-management)
-   - [DataOps](#dataops)
-   - [Orchestration](#orchestration)
-   - [Software Engineering](#software-engineering)
-9. [Conclusion](#conclusion)
-10. [Additional Resources](#additional-resources)
+1. [Introduction](#1-introduction)
+2. [What Is Data Ingestion?](#2-what-is-data-ingestion)
+   - 2.1. [Data Pipelines Defined](#21-data-pipelines-defined)
+3. [Key Engineering Considerations](#3-key-engineering-considerations)
+   - 3.1. [Bounded Versus Unbounded Data](#31-bounded-versus-unbounded-data)
+   - 3.2. [Frequency](#32-frequency)
+   - 3.3. [Synchronous Versus Asynchronous Ingestion](#33-synchronous-versus-asynchronous-ingestion)
+   - 3.4. [Serialization and Deserialization](#34-serialization-and-deserialization)
+   - 3.5. [Throughput and Scalability](#35-throughput-and-scalability)
+   - 3.6. [Reliability and Durability](#36-reliability-and-durability)
+   - 3.7. [Payload](#37-payload)
+   - 3.8. [Push Versus Pull Versus Poll Patterns](#38-push-versus-pull-versus-poll-patterns)
+4. [Batch Ingestion Considerations](#4-batch-ingestion-considerations)
+   - 4.1. [Snapshot or Differential Extraction](#41-snapshot-or-differential-extraction)
+   - 4.2. [File-Based Export and Ingestion](#42-file-based-export-and-ingestion)
+   - 4.3. [ETL Versus ELT](#43-etl-versus-elt)
+   - 4.4. [Inserts, Updates, and Batch Size](#44-inserts-updates-and-batch-size)
+   - 4.5. [Data Migration](#45-data-migration)
+5. [Message and Stream Ingestion Considerations](#5-message-and-stream-ingestion-considerations)
+   - 5.1. [Schema Evolution](#51-schema-evolution)
+   - 5.2. [Late-Arriving Data](#52-late-arriving-data)
+   - 5.3. [Ordering and Multiple Delivery](#53-ordering-and-multiple-delivery)
+   - 5.4. [Replay](#54-replay)
+   - 5.5. [Time to Live](#55-time-to-live)
+   - 5.6. [Message Size](#56-message-size)
+   - 5.7. [Error Handling and Dead-Letter Queues](#57-error-handling-and-dead-letter-queues)
+   - 5.8. [Consumer Pull and Push](#58-consumer-pull-and-push)
+   - 5.9. [Location](#59-location)
+6. [Ways to Ingest Data](#6-ways-to-ingest-data)
+   - 6.1. [Direct Database Connection](#61-direct-database-connection)
+   - 6.2. [Change Data Capture](#62-change-data-capture)
+   - 6.3. [APIs](#63-apis)
+   - 6.4. [Message Queues and Event-Streaming Platforms](#64-message-queues-and-event-streaming-platforms)
+   - 6.5. [Managed Data Connectors](#65-managed-data-connectors)
+   - 6.6. [Moving Data with Object Storage](#66-moving-data-with-object-storage)
+   - 6.7. [Other Ingestion Methods](#67-other-ingestion-methods)
+7. [Whom You'll Work With](#7-whom-youll-work-with)
+8. [Undercurrents](#8-undercurrents)
+9. [Summary](#9-summary)
 
-## What Is Data Ingestion?
+---
 
-Data ingestion is the process of moving data from one place to another. Data ingestion implies data movement from source systems into storage in the data engineering lifecycle, with ingestion as an intermediate step.
+## 1. Introduction
 
-It's worth quickly contrasting data ingestion with data integration. Whereas data ingestion is data movement from point A to B, data integration combines data from disparate sources into a new dataset. For example, you can use data integration to combine data from a CRM system, advertising analytics data, and web analytics to create a user profile, which is saved to your data warehouse. Furthermore, using reverse ETL, you can send this newly created user profile back to your CRM so salespeople can use the data for prioritizing leads. We describe data integration more fully in Chapter 8, where we discuss data transformations; reverse ETL is covered in Chapter 9.
+**In plain English:** Data ingestion is like the plumbing system in a house - you need pipes to move water from the main line to your faucets, shower, and appliances. Similarly, data ingestion moves data from source systems through various channels into storage where it can be used.
 
-We also point out that data ingestion is different from internal ingestion within a system. Data stored in a database is copied from one table to another, or data in a stream is temporarily cached. We consider this another part of the general data transformation process covered in Chapter 8.
+**In technical terms:** Data ingestion is the process of moving data from one place to another, specifically from source systems into storage in the data engineering lifecycle. It's the intermediate step that enables all downstream data processing, transformation, and analysis.
 
-## Data Pipelines Defined
+**Why it matters:** Without solid data ingestion, nothing else in the data engineering lifecycle can function. Bad ingestion means stale data, broken pipelines, and business decisions made without current information. Ingestion is where data engineering truly begins - it's the foundation upon which all analytics, ML, and reporting are built.
 
-Data pipelines begin in source systems, but ingestion is the stage where data engineers begin actively designing data pipeline activities. In the data engineering space, a good deal of ceremony occurs around data movement and processing patterns, with established patterns such as ETL, newer patterns such as ELT, and new names for long-established practices (reverse ETL) and data sharing.
+> **Insight**
+>
+> At the heart, ingestion is plumbing - connecting pipes to other pipes, ensuring data flows consistently and securely to its destination. While the minutiae may feel tedious, exciting data applications like analytics and ML cannot happen without it.
 
-All of these concepts are encompassed in the idea of a data pipeline. It is essential to understand the details of these various patterns and know that a modern data pipeline includes all of them. As the world moves away from a traditional monolithic approach with rigid constraints on data movement, and toward an open ecosystem of cloud services that are assembled like LEGO bricks to realize products, data engineers prioritize using the right tools to accomplish the desired outcome over adhering to a narrow philosophy of data movement.
+---
 
-In general, here's our definition of a data pipeline:
+## 2. What Is Data Ingestion?
+
+Data ingestion implies data movement from source systems into storage in the data engineering lifecycle, with ingestion as an intermediate step.
+
+<DiagramContainer title="Basic Data Ingestion Flow">
+  <ProcessFlow
+    direction="horizontal"
+    steps={[
+      {
+        title: "Source System",
+        description: "Database, API, streaming platform",
+        icon: "📊",
+        color: colors.blue
+      },
+      {
+        title: "Ingestion",
+        description: "Move and transform data",
+        icon: "🔄",
+        color: colors.purple
+      },
+      {
+        title: "Storage",
+        description: "Data warehouse, lake, database",
+        icon: "💾",
+        color: colors.green
+      }
+    ]}
+  />
+</DiagramContainer>
+
+**Ingestion vs Integration:**
+
+<ComparisonTable
+  beforeTitle="Data Ingestion"
+  afterTitle="Data Integration"
+  beforeColor={colors.blue}
+  afterColor={colors.purple}
+  items={[
+    {
+      label: "Definition",
+      before: "Moving data from point A to B",
+      after: "Combining data from disparate sources"
+    },
+    {
+      label: "Example",
+      before: "Copy CRM data to warehouse",
+      after: "Merge CRM + ads + web analytics"
+    },
+    {
+      label: "Output",
+      before: "Same data in new location",
+      after: "New combined dataset"
+    },
+    {
+      label: "Complexity",
+      before: "Simpler - movement focused",
+      after: "Complex - transformation focused"
+    }
+  ]}
+/>
+
+### 2.1. Data Pipelines Defined
+
+**In plain English:** A data pipeline is like a factory assembly line for data - raw materials (source data) come in one end, go through various processing stations (ingestion, transformation, quality checks), and finished products (analytics-ready data) come out the other end.
+
+**In technical terms:** A data pipeline is the combination of architecture, systems, and processes that move data through the stages of the data engineering lifecycle. It encompasses everything from ETL, ELT, reverse ETL, and data sharing.
+
+**Why it matters:** Modern data pipelines are deliberately flexible - they're not monolithic systems but ecosystems of cloud services assembled like LEGO bricks. Data engineers prioritize using the right tools to accomplish desired outcomes over adhering to narrow philosophies of data movement.
+
+**Our Definition:**
 
 > A data pipeline is the combination of architecture, systems, and processes that move data through the stages of the data engineering lifecycle.
 
-Our definition is deliberately fluid—and intentionally vague—to allow data engineers to plug in whatever they need to accomplish the task at hand. A data pipeline could be a traditional ETL system, where data is ingested from an on-premises transactional system, passed through a monolithic processor, and written into a data warehouse. Or it could be a cloud-based data pipeline that pulls data from 100 sources, combines it into 20 wide tables, trains five other ML models, deploys them into production, and monitors ongoing performance. A data pipeline should be flexible enough to fit any needs along the data engineering lifecycle.
+**Examples:**
 
-Let's keep this notion of data pipelines in mind as we proceed through this chapter.
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Traditional ETL Pipeline",
+      icon: "🏛️",
+      color: colors.orange,
+      items: [
+        "On-premises transactional system",
+        "Monolithic processor",
+        "Data warehouse destination",
+        "Batch-oriented approach"
+      ]
+    },
+    {
+      title: "Modern Cloud Pipeline",
+      icon: "☁️",
+      color: colors.blue,
+      items: [
+        "100+ sources",
+        "20 wide tables",
+        "5 ML models in production",
+        "Real-time monitoring"
+      ]
+    }
+  ]}
+/>
 
-## Key Engineering Considerations for the Ingestion Phase
+---
 
-When preparing to architect or build an ingestion system, here are some primary considerations and questions to ask yourself related to data ingestion:
+## 3. Key Engineering Considerations
 
-- What's the use case for the data I'm ingesting?
-- Can I reuse this data and avoid ingesting multiple versions of the same dataset?
-- Where is the data going? What's the destination?
-- How often should the data be updated from the source?
-- What is the expected data volume?
-- What format is the data in? Can downstream storage and transformation accept this format?
-- Is the source data in good shape for immediate downstream use? That is, is the data of good quality? What post-processing is required to serve it? What are data-quality risks (e.g., could bot traffic to a website contaminate the data)?
-- Does the data require in-flight processing for downstream ingestion if the data is from a streaming source?
+When preparing to architect or build an ingestion system, ask yourself these critical questions:
 
-These questions undercut batch and streaming ingestion and apply to the underlying architecture you'll create, build, and maintain. Regardless of how often the data is ingested, you'll want to consider these factors when designing your ingestion architecture:
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Use Case & Reuse",
+      icon: "🎯",
+      color: colors.blue,
+      items: [
+        "What's the use case?",
+        "Can I reuse this data?",
+        "Avoid multiple versions",
+        "Maximize data value"
+      ]
+    },
+    {
+      title: "Destination & Frequency",
+      icon: "📍",
+      color: colors.purple,
+      items: [
+        "Where is data going?",
+        "How often to update?",
+        "What's the volume?",
+        "What format?"
+      ]
+    },
+    {
+      title: "Quality & Processing",
+      icon: "✅",
+      color: colors.green,
+      items: [
+        "Is data good quality?",
+        "Post-processing needed?",
+        "In-flight processing?",
+        "Quality risks?"
+      ]
+    }
+  ]}
+/>
 
-- Bounded versus unbounded
-- Frequency
-- Synchronous versus asynchronous
-- Serialization and deserialization
-- Throughput and scalability
-- Reliability and durability
-- Payload
-- Push versus pull versus poll patterns
+### 3.1. Bounded Versus Unbounded Data
 
-Let's look at each of these.
+**In plain English:** Think of unbounded data like a river that never stops flowing - events keep happening continuously. Bounded data is like filling a bucket from that river - you capture a specific amount from a specific time period.
 
-### Bounded Versus Unbounded Data
+**In technical terms:** Unbounded data is data as it exists in reality - events happening sporadically or continuously, ongoing and flowing. Bounded data is a convenient way of bucketing data across some boundary, such as time.
 
-As you might recall from Chapter 3, data comes in two forms: bounded and unbounded. Unbounded data is data as it exists in reality, as events happen, either sporadically or continuously, ongoing and flowing. Bounded data is a convenient way of bucketing data across some sort of boundary, such as time.
+**Why it matters:** Understanding the true unbounded nature of your data helps you choose the right ingestion approach. Streaming systems preserve unbounded data so subsequent lifecycle steps can process it continuously.
 
-Let us adopt this mantra: All data is unbounded until it's bounded. Like many mantras, this one is not precisely accurate 100% of the time. The grocery list that I scribbled this afternoon is bounded data. I wrote it as a stream of consciousness (unbounded data) onto a piece of scrap paper, where the thoughts now exist as a list of things (bounded data) I need to buy at the grocery store. However, the idea is correct for practical purposes for the vast majority of data you'll handle in a business context. For example, an online retailer will process customer transactions 24 hours a day until the business fails, the economy grinds to a halt, or the sun explodes.
+**Our Mantra:**
 
-Business processes have long imposed artificial bounds on data by cutting discrete batches. Keep in mind the true unboundedness of your data; streaming ingestion systems are simply a tool for preserving the unbounded nature of data so that subsequent steps in the lifecycle can also process it continuously.
+> **All data is unbounded until it's bounded.**
 
-### Frequency
+<DiagramContainer title="Bounded vs Unbounded Data">
+  <Row gap="lg">
+    <Column gap="sm" align="center">
+      <Box color={colors.blue} variant="filled" icon="🌊">Unbounded Data</Box>
+      <Box color={colors.slate} variant="subtle">
+        Continuous flow of events
+      </Box>
+      <Column gap="xs">
+        <Box color={colors.blue} variant="outlined" size="sm">Real-time transactions</Box>
+        <Box color={colors.blue} variant="outlined" size="sm">IoT sensor streams</Box>
+        <Box color={colors.blue} variant="outlined" size="sm">User clickstreams</Box>
+      </Column>
+    </Column>
+    <Column gap="sm" align="center">
+      <Box color={colors.purple} variant="filled" icon="📦">Bounded Data</Box>
+      <Box color={colors.slate} variant="subtle">
+        Discrete batches with boundaries
+      </Box>
+      <Column gap="xs">
+        <Box color={colors.purple} variant="outlined" size="sm">Daily batches</Box>
+        <Box color={colors.purple} variant="outlined" size="sm">Hourly snapshots</Box>
+        <Box color={colors.purple} variant="outlined" size="sm">Monthly reports</Box>
+      </Column>
+    </Column>
+  </Row>
+</DiagramContainer>
 
-One of the critical decisions that data engineers must make in designing data-ingestion processes is the data-ingestion frequency. Ingestion processes can be batch, micro-batch, or real-time.
+### 3.2. Frequency
 
-Ingestion frequencies vary dramatically from slow to fast. On the slow end, a business might ship its tax data to an accounting firm once a year. On the faster side, a CDC system could retrieve new log updates from a source database once a minute. Even faster, a system might continuously ingest events from IoT sensors and process these within seconds. Data-ingestion frequencies are often mixed in a company, depending on the use case and technologies.
+One of the critical decisions data engineers must make is the data-ingestion frequency. Frequencies vary dramatically from slow to fast.
 
-We note that "real-time" ingestion patterns are becoming increasingly common. We put "real-time" in quotation marks because no ingestion system is genuinely real-time. Any database, queue or pipeline has inherent latency in delivering data to a target system. It is more accurate to speak of near real-time, but we often use real-time for brevity. The near real-time pattern generally does away with an explicit update frequency; events are processed in the pipeline either one by one as they arrive or in micro-batches (i.e., batches over concise time intervals). For this book, we will use real-time and streaming interchangeably.
+<DiagramContainer title="Ingestion Frequency Spectrum">
+  <ProcessFlow
+    direction="horizontal"
+    steps={[
+      {
+        title: "Annual",
+        description: "Tax data to accounting firm",
+        icon: "📅",
+        color: colors.orange
+      },
+      {
+        title: "Daily Batch",
+        description: "Overnight ETL processes",
+        icon: "🌙",
+        color: colors.blue
+      },
+      {
+        title: "Micro-Batch",
+        description: "CDC every minute",
+        icon: "⏱️",
+        color: colors.purple
+      },
+      {
+        title: "Streaming",
+        description: "IoT sensors continuous",
+        icon: "⚡",
+        color: colors.green
+      }
+    ]}
+  />
+</DiagramContainer>
 
-Even with a streaming data-ingestion process, batch processing downstream is relatively standard. At the time of this writing, ML models are typically trained on a batch basis, although continuous online training is becoming more prevalent. Rarely do data engineers have the option to build a purely near real-time pipeline with no batch components. Instead, they choose where batch boundaries will occur—i.e., the data engineering lifecycle data will be broken into batches. Once data reaches a batch process, the batch frequency becomes a bottleneck for all downstream processing.
+**In plain English:** "Real-time" is a bit of a misnomer - no system is genuinely real-time. Every database, queue, or pipeline has inherent latency. It's more accurate to speak of "near real-time," but we often use "real-time" for brevity and will use it interchangeably with "streaming" in this book.
 
-In addition, streaming systems are the best fit for many data source types. In IoT applications, the typical pattern is for each sensor to write events or measurements to streaming systems as they happen. While this data can be written directly into a database, a streaming ingestion platform such as Amazon Kinesis or Apache Kafka is a better fit for the application. Software applications can adopt similar patterns by writing events to a message queue as they happen rather than waiting for an extraction process to pull events and state information from a backend database. This pattern works exceptionally well for event-driven architectures already exchanging messages through queues. And again, streaming architectures generally coexist with batch processing.
+**Key Considerations:**
 
-### Synchronous Versus Asynchronous Ingestion
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Batch Processing Realities",
+      icon: "📦",
+      color: colors.orange,
+      items: [
+        "Still common downstream of streaming",
+        "ML models often batch-trained",
+        "Choose where batch boundaries occur",
+        "Batch frequency = downstream bottleneck"
+      ]
+    },
+    {
+      title: "Streaming Use Cases",
+      icon: "🌊",
+      color: colors.blue,
+      items: [
+        "IoT sensors writing continuously",
+        "Event-driven architectures",
+        "Message queue patterns",
+        "Coexists with batch processing"
+      ]
+    }
+  ]}
+/>
 
-With synchronous ingestion, the source, ingestion, and destination have complex dependencies and are tightly coupled. As you can see in the following figure, each stage of the data engineering lifecycle has processes A, B, and C directly dependent upon one another. If process A fails, processes B and C cannot start; if process B fails, process C doesn't start. This type of synchronous workflow is common in older ETL systems, where data extracted from a source system must then be transformed before being loaded into a data warehouse. Processes downstream of ingestion can't start until all data in the batch has been ingested. If the ingestion or transformation process fails, the entire process must be rerun.
+### 3.3. Synchronous Versus Asynchronous Ingestion
 
-Here's a mini case study of how not to design your data pipelines. At one company, the transformation process itself was a series of dozens of tightly coupled synchronous workflows, with the entire process taking over 24 hours to finish. If any step of that transformation pipeline failed, the whole transformation process had to be restarted from the beginning! In this instance, we saw process after process fail, and because of nonexistent or cryptic error messages, fixing the pipeline was a game of whack-a-mole that took over a week to diagnose and cure. Meanwhile, the business didn't have updated reports during that time. People weren't happy.
+<ComparisonTable
+  beforeTitle="Synchronous Ingestion"
+  afterTitle="Asynchronous Ingestion"
+  beforeColor={colors.red}
+  afterColor={colors.green}
+  items={[
+    {
+      label: "Dependencies",
+      before: "Complex, tightly coupled",
+      after: "Independent, loosely coupled"
+    },
+    {
+      label: "Failure Impact",
+      before: "One failure stops everything",
+      after: "Isolated failures, continues processing"
+    },
+    {
+      label: "Processing",
+      before: "Discrete batch steps",
+      after: "Event-level operations"
+    },
+    {
+      label: "Common In",
+      before: "Older ETL systems",
+      after: "Modern streaming architectures"
+    }
+  ]}
+/>
 
-With asynchronous ingestion, dependencies can now operate at the level of individual events, much as they would in a software backend built from microservices. Individual events become available in storage as soon as they are ingested individually. Take the example of a web application on AWS that emits events into Amazon Kinesis Data Streams (here acting as a buffer). The stream is read by Apache Beam, which parses and enriches events, and then forwards them to a second Kinesis stream; Kinesis Data Firehose rolls up events and writes objects to Amazon S3.
+**Synchronous Ingestion:**
 
-The big idea is that rather than relying on asynchronous processing, where a batch process runs for each stage as the input batch closes and certain time conditions are met, each stage of the asynchronous pipeline can process data items as they become available in parallel across the Beam cluster. The processing rate depends on available resources. The Kinesis Data Stream acts as the shock absorber, moderating the load so that event rate spikes will not overwhelm downstream processing. Events will move through the pipeline quickly when the event rate is low, and any backlog has cleared. Note that we could modify the scenario and use a Kinesis Data Stream for storage, eventually extracting events to S3 before they expire out of the stream.
+**In plain English:** Synchronous ingestion is like a relay race - if the first runner drops the baton, the whole race stops. Each stage depends directly on the previous stage completing successfully.
 
-### Serialization and Deserialization
+<DiagramContainer title="Synchronous Processing">
+  <ProcessFlow
+    direction="horizontal"
+    steps={[
+      {
+        title: "Extract",
+        description: "Must complete before transform",
+        icon: "📤",
+        color: colors.blue
+      },
+      {
+        title: "Transform",
+        description: "Must complete before load",
+        icon: "⚙️",
+        color: colors.purple
+      },
+      {
+        title: "Load",
+        description: "Can't start until transform done",
+        icon: "💾",
+        color: colors.green
+      }
+    ]}
+  />
+  <Box color={colors.red} variant="subtle">
+    If any step fails, entire process must restart from beginning
+  </Box>
+</DiagramContainer>
 
-Moving data from source to destination involves serialization and deserialization. As a reminder, serialization means encoding the data from a source and preparing data structures for transmission and intermediate storage stages.
+:::warning Horror Story: Synchronous Pipeline Failure
 
-When ingesting data, ensure that your destination can deserialize the data it receives. We've seen data ingested from a source but then sitting inert and unusable in the destination because the data cannot be properly deserialized. See the more extensive discussion of serialization in Appendix A.
+At one company, the transformation process was dozens of tightly coupled synchronous workflows taking over 24 hours to finish. If any step failed, the **whole process restarted from the beginning**.
 
-### Throughput and Scalability
+With cryptic error messages, fixing the pipeline became whack-a-mole taking over a week to cure. Meanwhile, the business had no updated reports. People weren't happy.
 
-In theory, your ingestion should never be a bottleneck. In practice, ingestion bottlenecks are pretty standard. Data throughput and system scalability become critical as your data volumes grow and requirements change. Design your systems to scale and shrink to flexibly match the desired data throughput.
+:::
 
-Where you're ingesting data from matters a lot. If you're receiving data as it's generated, will the upstream system have any issues that might impact your downstream ingestion pipelines? For example, suppose a source database goes down. When it comes back online and attempts to backfill the lapsed data loads, will your ingestion be able to keep up with this sudden influx of backlogged data?
+**Asynchronous Ingestion:**
 
-Another thing to consider is your ability to handle bursty data ingestion. Data generation rarely happens at a constant rate and often ebbs and flows. Built-in buffering is required to collect events during rate spikes to prevent data from getting lost. Buffering bridges the time while the system scales and allows storage systems to accommodate bursts even in a dynamically scalable system.
+**In plain English:** Asynchronous ingestion is like a restaurant kitchen - different stations work independently. The grill doesn't wait for the salad station to finish; they work in parallel and coordinate only when assembling the final dish.
 
-Whenever possible, use managed services that handle the throughput scaling for you. While you can manually accomplish these tasks by adding more servers, shards, or workers, often this isn't value-added work, and there's a good chance you'll miss something. Much of this heavy lifting is now automated. Don't reinvent the data ingestion wheel if you don't have to.
+<DiagramContainer title="Asynchronous Processing Example (AWS)">
+  <ProcessFlow
+    direction="vertical"
+    steps={[
+      {
+        title: "Web Application",
+        description: "Emits events continuously",
+        icon: "🌐",
+        color: colors.blue
+      },
+      {
+        title: "Kinesis Data Streams",
+        description: "Buffer and shock absorber",
+        icon: "📨",
+        color: colors.purple
+      },
+      {
+        title: "Apache Beam",
+        description: "Parse and enrich events in parallel",
+        icon: "⚙️",
+        color: colors.green
+      },
+      {
+        title: "Kinesis Firehose",
+        description: "Roll up and write to S3",
+        icon: "💾",
+        color: colors.orange
+      }
+    ]}
+  />
+</DiagramContainer>
 
-### Reliability and Durability
+**Why it matters:** Each stage processes data items as they become available in parallel. The stream acts as a shock absorber, moderating load so event spikes won't overwhelm downstream processing. Events move quickly when rates are low; backlog clears automatically.
 
-Reliability and durability are vital in the ingestion stages of data pipelines. Reliability entails high uptime and proper failover for ingestion systems. Durability entails making sure that data isn't lost or corrupted.
+### 3.4. Serialization and Deserialization
 
-Some data sources (e.g., IoT devices and caches) may not retain data if it is not correctly ingested. Once lost, it is gone for good. In this sense, the reliability of ingestion systems leads directly to the durability of generated data. If data is ingested, downstream processes can theoretically run late if they break temporarily.
+**In plain English:** Serialization is like packing a suitcase - you need to organize your belongings in a specific way to fit them efficiently and protect them during travel. Deserialization is unpacking at your destination.
 
-Our advice is to evaluate the risks and build an appropriate level of redundancy and self-healing based on the impact and cost of losing data. Reliability and durability have both direct and indirect costs. For example, will your ingestion process continue if an AWS zone goes down? How about a whole region? How about the power grid or the internet? Of course, nothing is free. How much will this cost you? You might be able to build a highly redundant system and have a team on call 24 hours a day to handle outages. This also means your cloud and labor costs become prohibitive (direct costs), and the ongoing work takes a significant toll on your team (indirect costs). There's no single correct answer, and you need to evaluate the costs and benefits of your reliability and durability decisions.
+**In technical terms:** Serialization means encoding data from a source and preparing data structures for transmission and intermediate storage stages. Deserialization is the reverse - decoding received data.
 
-Don't assume that you can build a system that will reliably and durably ingest data in every possible scenario. Even the nearly infinite budget of the US federal government can't guarantee this. In many extreme scenarios, ingesting data actually won't matter. There will be little to ingest if the internet goes down, even if you build multiple air-gapped data centers in underground bunkers with independent power. Continually evaluate the trade-offs and costs of reliability and durability.
+**Why it matters:** Ensure your destination can deserialize the data it receives. We've seen data ingested from a source but sitting inert and unusable because it cannot be properly deserialized.
 
-### Payload
+> **Insight**
+>
+> Always verify serialization compatibility between source and destination. See Appendix A for extensive discussion of serialization formats.
 
-A payload is the dataset you're ingesting and has characteristics such as kind, shape, size, schema and data types, and metadata. Let's look at some of these characteristics to understand why this matters.
+### 3.5. Throughput and Scalability
+
+**In plain English:** Throughput is like water pressure in your pipes - you need enough capacity to handle peak demand (everyone showering in the morning) without the system backing up or bursting.
+
+**In technical terms:** Data throughput and system scalability become critical as data volumes grow and requirements change. Design systems to scale and shrink flexibly to match desired data throughput.
+
+**Why it matters:** In theory, ingestion should never be a bottleneck. In practice, ingestion bottlenecks are pretty standard.
+
+**Critical Considerations:**
+
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Upstream Impact",
+      icon: "⬆️",
+      color: colors.red,
+      items: [
+        "Source database goes down",
+        "Backfill when it comes online",
+        "Sudden influx of backlogged data",
+        "Can ingestion keep up?"
+      ]
+    },
+    {
+      title: "Bursty Data Handling",
+      icon: "💥",
+      color: colors.orange,
+      items: [
+        "Data generation rarely constant",
+        "Ebbs and flows common",
+        "Built-in buffering required",
+        "Bridge time while system scales"
+      ]
+    }
+  ]}
+/>
+
+> **Insight**
+>
+> Whenever possible, use managed services that handle throughput scaling for you. Don't reinvent the data ingestion wheel if you don't have to. Manual scaling with servers, shards, or workers often isn't value-added work, and there's a good chance you'll miss something.
+
+### 3.6. Reliability and Durability
+
+**In plain English:** Reliability is like having a backup generator - your lights stay on even during a power outage. Durability is like storing important documents in a fireproof safe - they won't be lost even in a disaster.
+
+**In technical terms:** Reliability entails high uptime and proper failover for ingestion systems. Durability entails making sure data isn't lost or corrupted.
+
+**Why it matters:** Some data sources (IoT devices, caches) may not retain data if not correctly ingested. Once lost, it's gone for good. Reliability of ingestion systems leads directly to durability of generated data.
+
+**Trade-off Evaluation:**
+
+<DiagramContainer title="Reliability vs Cost Trade-offs">
+  <Column gap="md">
+    <Box color={colors.blue} variant="filled">
+      Question: Will ingestion continue if AWS zone goes down?
+    </Box>
+    <Row gap="md">
+      <Column gap="sm">
+        <Box color={colors.green} icon="✅">High Reliability</Box>
+        <Box color={colors.green} variant="outlined" size="sm">Multi-zone redundancy</Box>
+        <Box color={colors.red} variant="outlined" size="sm">Higher cloud costs</Box>
+        <Box color={colors.red} variant="outlined" size="sm">24/7 on-call team</Box>
+        <Box color={colors.red} variant="outlined" size="sm">Team burnout risk</Box>
+      </Column>
+      <Column gap="sm">
+        <Box color={colors.orange} icon="⚖️">Balanced Approach</Box>
+        <Box color={colors.blue} variant="outlined" size="sm">Evaluate impact</Box>
+        <Box color={colors.blue} variant="outlined" size="sm">Assess costs</Box>
+        <Box color={colors.blue} variant="outlined" size="sm">Build appropriate level</Box>
+        <Box color={colors.blue} variant="outlined" size="sm">Accept trade-offs</Box>
+      </Column>
+    </Row>
+  </Column>
+</DiagramContainer>
+
+> **Insight**
+>
+> Don't assume you can build a system that will reliably ingest data in every possible scenario. Even the nearly infinite budget of the US federal government can't guarantee this. Continually evaluate trade-offs and costs.
+
+### 3.7. Payload
+
+A payload is the dataset you're ingesting and has characteristics such as kind, shape, size, schema and data types, and metadata.
 
 #### Kind
 
-The kind of data you handle directly impacts how it's dealt with downstream in the data engineering lifecycle. Kind consists of type and format. Data has a type—tabular, image, video, text, etc. The type directly influences the data format or the way it is expressed in bytes, names, and file extensions. For example, a tabular kind of data may be in formats such as CSV or Parquet, with each of these formats having different byte patterns for serialization and deserialization. Another kind of data is an image, which has a format of JPG or PNG and is inherently unstructured.
+**In plain English:** Kind is like the category of a file - is it a document, image, video, or spreadsheet? Each type has different formats and ways of being handled.
+
+**In technical terms:** Kind consists of type and format. Data has a type (tabular, image, video, text). The type influences the format - how it's expressed in bytes, names, and file extensions.
+
+**Examples:**
+
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Tabular Data",
+      icon: "📊",
+      color: colors.blue,
+      items: [
+        "Type: Tabular",
+        "Formats: CSV, Parquet, Avro",
+        "Different byte patterns",
+        "Structured"
+      ]
+    },
+    {
+      title: "Image Data",
+      icon: "🖼️",
+      color: colors.purple,
+      items: [
+        "Type: Image",
+        "Formats: JPG, PNG, GIF",
+        "Binary data",
+        "Unstructured"
+      ]
+    }
+  ]}
+/>
 
 #### Shape
 
-Every payload has a shape that describes its dimensions. Data shape is critical across the data engineering lifecycle. For instance, an image's pixel and red, green, blue (RGB) dimensions are necessary for training deep learning models. As another example, if you're trying to import a CSV file into a database table, and your CSV has more columns than the database table, you'll likely get an error during the import process. Here are some examples of the shapes of various kinds of data:
+Every payload has a shape that describes its dimensions. Data shape is critical across the data engineering lifecycle.
 
-**Tabular**
-The number of rows and columns in the dataset, commonly expressed as M rows and N columns
+**Shape Examples:**
 
-**Semistructured JSON**
-The key-value pairs and nesting depth occur with subelements
-
-**Unstructured text**
-Number of words, characters, or bytes in the text body
-
-**Images**
-The width, height, and RGB color depth (e.g., 8 bits per pixel)
-
-**Uncompressed audio**
-Number of channels (e.g., two for stereo), sample depth (e.g., 16 bits per sample), sample rate (e.g., 48 kHz), and length (e.g., 10,003 seconds)
+- **Tabular:** M rows and N columns
+- **Semistructured JSON:** Key-value pairs and nesting depth
+- **Unstructured text:** Number of words, characters, or bytes
+- **Images:** Width, height, RGB color depth (e.g., 8 bits per pixel)
+- **Audio:** Channels (stereo = 2), sample depth (16 bits), sample rate (48 kHz), length
 
 #### Size
 
-The size of the data describes the number of bytes of a payload. A payload may range in size from single bytes to terabytes and larger. To reduce the size of a payload, it may be compressed into various formats such as ZIP and TAR (see the discussion of compression in Appendix A).
+**In plain English:** Size is simply how many bytes of storage your data requires. A massive payload can be compressed (like zipping a file) or split into chunks (like breaking a large file into multiple smaller files for easier transmission).
 
-A massive payload can also be split into chunks, which effectively reduces the size of the payload into smaller subsections. When loading a huge file into a cloud object storage or data warehouse, this is a common practice as the small individual files are easier to transmit over a network (especially if they're compressed). The smaller chunked files are sent to their destination and then reassembled after all data has arrived.
+**Common Practices:**
 
-#### Schema and data types
+<ProcessFlow
+  direction="horizontal"
+  steps={[
+    {
+      title: "Original Payload",
+      description: "100 GB file",
+      icon: "📦",
+      color: colors.red
+    },
+    {
+      title: "Compress",
+      description: "ZIP/TAR to 30 GB",
+      icon: "🗜️",
+      color: colors.orange
+    },
+    {
+      title: "Chunk",
+      description: "Split into 1 GB files",
+      icon: "✂️",
+      color: colors.blue
+    },
+    {
+      title: "Transmit",
+      description: "Easier over network",
+      icon: "📡",
+      color: colors.green
+    }
+  ]}
+/>
 
-Many data payloads have a schema, such as tabular and semistructured data. As mentioned earlier in this book, a schema describes the fields and types of data within those fields. Other data, such as unstructured text, images, and audio, will not have an explicit schema or data types. However, they might come with technical file descriptions on shape, data and file format, encoding, size, etc.
+#### Schema and Data Types
 
-Although you can connect to databases in various ways (such as file export, CDC, JDBC/ODBC), the connection is easy. The great engineering challenge is understanding the underlying schema. Applications organize data in various ways, and engineers need to be intimately familiar with the organization of the data and relevant update patterns to make sense of it. The problem has been somewhat exacerbated by the popularity of object-relational mapping (ORM), which automatically generates schemas based on object structure in languages such as Java or Python. Natural structures in an object-oriented language often map to something messy in an operational database. Data engineers may need to familiarize themselves with the class structure of application code.
+**In plain English:** Schema is like the blueprint for a database table - it describes what columns exist, what type of data goes in each column (numbers, text, dates), and what rules apply (can it be empty? must it be unique?).
 
-Schema is not only for databases. As we've discussed, APIs present their schema complications. Many vendor APIs have friendly reporting methods that prepare data for analytics. In other cases, engineers are not so lucky. The API is a thin wrapper around underlying systems, requiring engineers to understand application internals to use the data.
+**The Engineering Challenge:**
 
-Much of the work associated with ingesting from source schemas happens in the data engineering lifecycle transformation stage, which we discuss in Chapter 8. We've placed this discussion here because data engineers need to begin studying source schemas as soon they plan to ingest data from a new source.
+> The connection is easy. The great engineering challenge is understanding the underlying schema. Applications organize data in various ways, and engineers need to be intimately familiar with the organization of data and relevant update patterns to make sense of it.
 
-Communication is critical for understanding source data, and engineers also have the opportunity to reverse the flow of communication and help software engineers improve data where it is produced. Later in this chapter, we'll return to this topic in "Whom You'll Work With".
+**Complications:**
 
-#### Detecting and handling upstream and downstream schema changes
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "ORM-Generated Schemas",
+      icon: "🔄",
+      color: colors.orange,
+      items: [
+        "Auto-generated from code",
+        "Natural in OOP languages",
+        "Often messy in databases",
+        "Requires understanding code structure"
+      ]
+    },
+    {
+      title: "API Schema Challenges",
+      icon: "🔌",
+      color: colors.red,
+      items: [
+        "Some have friendly reporting methods",
+        "Others are thin wrappers",
+        "Must understand application internals",
+        "Communication is critical"
+      ]
+    }
+  ]}
+/>
 
-Changes in schema frequently occur in source systems and are often well out of data engineers' control. Examples of schema changes include the following:
+#### Detecting and Handling Schema Changes
 
-- Adding a new column
-- Changing a column type
-- Creating a new table
-- Renaming a column
+Schema changes frequently occur in source systems and are often well out of data engineers' control.
 
-It's becoming increasingly common for ingestion tools to automate the detection of schema changes and even auto-update target tables. Ultimately, this is something of a mixed blessing. Schema changes can still break pipelines downstream of staging and ingestion.
+**Common Schema Changes:**
 
-Engineers must still implement strategies to respond to changes automatically and alert on changes that cannot be accommodated automatically. Automation is excellent, but the analysts and data scientists who rely on this data should be informed of the schema changes that violate existing assumptions. Even if automation can accommodate a change, the new schema may adversely affect the performance of reports and models. Communication between those making schema changes and those impacted by these changes is as important as reliable automation that checks for schema changes.
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Additive Changes",
+      icon: "➕",
+      color: colors.green,
+      items: [
+        "Adding new columns",
+        "Creating new tables",
+        "Usually easier to handle",
+        "May require minimal updates"
+      ]
+    },
+    {
+      title: "Breaking Changes",
+      icon: "💥",
+      color: colors.red,
+      items: [
+        "Changing column types",
+        "Renaming columns",
+        "Can break pipelines",
+        "Requires coordination"
+      ]
+    }
+  ]}
+/>
 
-#### Schema registries
+**Modern Approaches:**
 
-In streaming data, every message has a schema, and these schemas may evolve between producers and consumers. A schema registry is a metadata repository used to maintain schema and data type integrity in the face of constantly changing schemas. Schema registries can also track schema versions and history. It describes the data model for messages, allowing consistent serialization and deserialization between producers and consumers. Schema registries are used in most major data tools and clouds.
+It's becoming increasingly common for ingestion tools to automate detection of schema changes and even auto-update target tables. This is a mixed blessing.
+
+:::warning Schema Change Automation
+
+While automation is excellent, analysts and data scientists relying on data should be informed of schema changes that violate existing assumptions. Even if automation accommodates a change, the new schema may adversely affect performance of reports and models.
+
+**Communication between those making schema changes and those impacted is as important as reliable automation.**
+
+:::
+
+#### Schema Registries
+
+**In plain English:** A schema registry is like a version control system for data schemas - it tracks how your data structure has evolved over time and ensures producers and consumers stay in sync.
+
+**In technical terms:** A schema registry is a metadata repository used to maintain schema and data type integrity in the face of constantly changing schemas. It tracks schema versions and history, describes the data model for messages, and allows consistent serialization/deserialization between producers and consumers.
+
+**Why it matters:** Used in most major data tools and clouds, especially critical for streaming data where every message has a schema that may evolve.
 
 #### Metadata
 
-In addition to the apparent characteristics we've just covered, a payload often contains metadata, which we first discussed in Chapter 2. Metadata is data about data. Metadata can be as critical as the data itself. One of the significant limitations of the early approach to the data lake—or data swamp, which could become a data superfund site—was a complete lack of attention to metadata. Without a detailed description of the data, it may be of little value. We've already discussed some types of metadata (e.g., schema) and will address them many times throughout this chapter.
-
-### Push Versus Pull Versus Poll Patterns
-
-We mentioned push versus pull when we introduced the data engineering lifecycle in Chapter 2. A push strategy involves a source system sending data to a target, while a pull strategy entails a target reading data directly from a source. As we mentioned in that discussion, the lines between these strategies are blurry.
-
-Another pattern related to pulling is polling for data. Polling involves periodically checking a data source for any changes. When changes are detected, the destination pulls the data as it would in a regular pull situation.
-
-## Batch Ingestion Considerations
-
-Batch ingestion, which involves processing data in bulk, is often a convenient way to ingest data. This means that data is ingested by taking a subset of data from a source system, based either on a time interval or the size of accumulated data.
-
-Time-interval batch ingestion is widespread in traditional business ETL for data warehousing. This pattern is often used to process data once a day, overnight during off-hours, to provide daily reporting, but other frequencies can also be used.
-
-Size-based batch ingestion is quite common when data is moved from a streaming-based system into object storage; ultimately, you must cut the data into discrete blocks for future processing in a data lake. Some size-based ingestion systems can break data into objects based on various criteria, such as the size in bytes of the total number of events.
-
-Some commonly used batch ingestion patterns, which we discuss in this section, include the following:
-
-- Snapshot or differential extraction
-- File-based export and ingestion
-- ETL versus ELT
-- Inserts, updates, and batch size
-- Data migration
-
-### Snapshot or Differential Extraction
-
-Data engineers must choose whether to capture full snapshots of a source system or differential (sometimes called incremental) updates. With full snapshots, engineers grab the entire current state of the source system on each update read. With the differential update pattern, engineers can pull only the updates and changes since the last read from the source system. While differential updates are ideal for minimizing network traffic and target storage usage, full snapshot reads remain extremely common because of their simplicity.
-
-### File-Based Export and Ingestion
-
-Data is quite often moved between databases and systems using files. Data is serialized into files in an exchangeable format, and these files are provided to an ingestion system. We consider file-based export to be a push-based ingestion pattern. This is because data export and preparation work is done on the source system side.
-
-File-based ingestion has several potential advantages over a direct database connection approach. It is often undesirable to allow direct access to backend systems for security reasons. With file-based ingestion, export processes are run on the data-source side, giving source system engineers complete control over what data gets exported and how the data is preprocessed. Once files are done, they can be provided to the target system in various ways. Common file-exchange methods are object storage, secure file transfer protocol (SFTP), electronic data interchange (EDI), or secure copy (SCP).
-
-### ETL Versus ELT
-
-Chapter 3 introduced ETL and ELT, both extremely common ingestion, storage, and transformation patterns you'll encounter in batch workloads. The following are brief definitions of the extract and load parts of ETL and ELT:
-
-**Extract**
-This means getting data from a source system. While extract seems to imply pulling data, it can also be push based. Extraction may also require reading metadata and schema changes.
-
-**Load**
-Once data is extracted, it can either be transformed (ETL) before loading it into a storage destination or simply loaded into storage for future transformation. When loading data, you should be mindful of the type of system you're loading, the schema of the data, and the performance impact of loading.
-
-We cover ETL and ELT in greater detail in Chapter 8.
-
-### Inserts, Updates, and Batch Size
-
-Batch-oriented systems often perform poorly when users attempt to perform many small-batch operations rather than a smaller number of large operations. For example, while it is common to insert one row at a time in a transactional database, this is a bad pattern for many columnar databases, as it forces the creation of many small, suboptimal files and forces the system to run a high number of create object operations. Running many small in-place update operations is an even bigger problem because it causes the database to scan each existing column file to run the update.
-
-Understand the appropriate update patterns for the database or data store you're working with. Also, understand that certain technologies are purpose-built for high insert rates. For example, Apache Druid and Apache Pinot can handle high insert rates. SingleStore can manage hybrid workloads that combine OLAP and OLTP characteristics. BigQuery performs poorly on a high rate of vanilla SQL single-row inserts but extremely well if data is fed in through its stream buffer. Know the limits and characteristics of your tools.
-
-### Data Migration
-
-Migrating data to a new database or environment is not usually trivial, and data needs to be moved in bulk. Sometimes this means moving data sizes that are hundreds of terabytes or much larger, often involving the migration of specific tables and moving entire databases and systems.
-
-Data migrations probably aren't a regular occurrence as a data engineer, but you should be familiar with them. As is often the case for data ingestion, schema management is a crucial consideration. Suppose you're migrating data from one database system to a different one (say, SQL Server to Snowflake). No matter how closely the two databases resemble each other, subtle differences almost always exist in the way they handle schema. Fortunately, it is generally easy to test ingestion of a sample of data and find schema issues before undertaking a complete table migration.
-
-Most data systems perform best when data is moved in bulk rather than as individual rows or events. File or object storage is often an excellent intermediate stage for transferring data. Also, one of the biggest challenges of database migration is not the movement of the data itself but the movement of data pipeline connections from the old system to the new one.
-
-Be aware that many tools are available to automate various types of data migrations. Especially for large and complex migrations, we suggest looking at these options before doing this manually or writing your own migration solution.
-
-## Message and Stream Ingestion Considerations
-
-Ingesting event data is common. This section covers issues you should consider when ingesting events, drawing on topics covered in Chapters 5 and 6.
-
-### Schema Evolution
-
-Schema evolution is common when handling event data; fields may be added or removed, or value types might change (say, a string to an integer). Schema evolution can have unintended impacts on your data pipelines and destinations. For example, an IoT device gets a firmware update that adds a new field to the event it transmits, or a third-party API introduces changes to its event payload or countless other scenarios. All of these potentially impact your downstream capabilities.
-
-To alleviate issues related to schema evolution, here are a few suggestions. First, if your event-processing framework has a schema registry (discussed earlier in this chapter), use it to version your schema changes. Next, a dead-letter queue (described in "Error Handling and Dead-Letter Queues") can help you investigate issues with events that are not properly handled. Finally, the low-fidelity route (and the most effective) is regularly communicating with upstream stakeholders about potential schema changes and proactively addressing schema changes with the teams introducing these changes instead of reacting to the receiving end of breaking changes.
-
-### Late-Arriving Data
-
-Though you probably prefer all event data to arrive on time, event data might arrive late. A group of events might occur around the same time frame (similar event times), but some might arrive later than others (late ingestion times) because of various circumstances.
-
-For example, an IoT device might be late sending a message because of internet latency issues. This is common when ingesting data. You should be aware of late-arriving data and the impact on downstream systems and uses. Suppose you assume that ingestion or process time is the same as the event time. You may get some strange results if your reports or analysis depend on an accurate portrayal of when events occur. To handle late-arriving data, you need to set a cutoff time for when late-arriving data will no longer be processed.
-
-### Ordering and Multiple Delivery
-
-Streaming platforms are generally built out of distributed systems, which can cause some complications. Specifically, messages may be delivered out of order and more than once (at-least-once delivery). See the event-streaming platforms discussion in Chapter 5 for more details.
-
-### Replay
-
-Replay allows readers to request a range of messages from the history, allowing you to rewind your event history to a particular point in time. Replay is a key capability in many streaming ingestion platforms and is particularly useful when you need to reingest and reprocess data for a specific time range. For example, RabbitMQ typically deletes messages after all subscribers consume them. Kafka, Kinesis, and Pub/Sub all support event retention and replay.
-
-### Time to Live
-
-How long will you preserve your event record? A key parameter is maximum message retention time, also known as the time to live (TTL). TTL is usually a configuration you'll set for how long you want events to live before they are acknowledged and ingested. Any unacknowledged event that's not ingested after its TTL expires automatically disappears. This is helpful to reduce backpressure and unnecessary event volume in your event-ingestion pipeline.
-
-Find the right balance of TTL impact on our data pipeline. An extremely short TTL (milliseconds or seconds) might cause most messages to disappear before processing. A very long TTL (several weeks or months) will create a backlog of many unprocessed messages, resulting in long wait times.
-
-Let's look at how some popular platforms handle TTL at the time of this writing. Google Cloud Pub/Sub supports retention periods of up to 7 days. Amazon Kinesis Data Streams retention can be turned up to 365 days. Kafka can be configured for indefinite retention, limited by available disk space. (Kafka also supports the option to write older messages to cloud object storage, unlocking virtually unlimited storage space and retention.)
-
-### Message Size
-
-Message size is an easily overlooked issue: you must ensure that the streaming framework in question can handle the maximum expected message size. Amazon Kinesis supports a maximum message size of 1 MB. Kafka defaults to this maximum size but can be configured for a maximum of 20 MB or more. (Configurability may vary on managed service platforms.)
-
-### Error Handling and Dead-Letter Queues
-
-Sometimes events aren't successfully ingested. Perhaps an event is sent to a nonexistent topic or message queue, the message size may be too large, or the event has expired past its TTL. Events that cannot be ingested need to be rerouted and stored in a separate location called a dead-letter queue.
-
-A dead-letter queue segregates problematic events from events that can be accepted by the consumer. If events are not rerouted to a dead-letter queue, these erroneous events risk blocking other messages from being ingested. Data engineers can use a dead-letter queue to diagnose why event ingestions errors occur and solve data pipeline problems, and might be able to reprocess some messages in the queue after fixing the underlying cause of errors.
-
-### Consumer Pull and Push
-
-A consumer subscribing to a topic can get events in two ways: push and pull. Let's look at the ways some streaming technologies pull and push data. Kafka and Kinesis support only pull subscriptions. Subscribers read messages from a topic and confirm when they have been processed. In addition to pull subscriptions, Pub/Sub and RabbitMQ support push subscriptions, allowing these services to write messages to a listener.
-
-Pull subscriptions are the default choice for most data engineering applications, but you may want to consider push capabilities for specialized applications. Note that pull-only message ingestion systems can still push if you add an extra layer to handle this.
-
-### Location
-
-It is often desirable to integrate streaming across several locations for enhanced redundancy and to consume data close to where it is generated. As a general rule, the closer your ingestion is to where data originates, the better your bandwidth and latency. However, you need to balance this against the costs of moving data between regions to run analytics on a combined dataset. As always, data egress costs can spiral quickly. Do a careful evaluation of the trade-offs as you build out your architecture.
-
-## Ways to Ingest Data
-
-Now that we've described some of the significant patterns underlying batch and streaming ingestion, let's focus on ways you can ingest data. Although we will cite some common ways, keep in mind that the universe of data ingestion practices and technologies is vast and growing daily.
-
-### Direct Database Connection
-
-Data can be pulled from databases for ingestion by querying and reading over a network connection. Most commonly, this connection is made using ODBC or JDBC.
-
-ODBC uses a driver hosted by a client accessing the database to translate commands issued to the standard ODBC API into commands issued to the database. The database returns query results over the wire, where the driver receives them and translates them back into a standard form to be read by the client. For ingestion, the application utilizing the ODBC driver is an ingestion tool. The ingestion tool may pull data through many small queries or a single large query.
-
-JDBC is conceptually remarkably similar to ODBC. A Java driver connects to a remote database and serves as a translation layer between the standard JDBC API and the native network interface of the target database. It might seem strange to have a database API dedicated to a single programming language, but there are strong motivations for this. The Java Virtual Machine (JVM) is standard, portable across hardware architectures and operating systems, and provides the performance of compiled code through a just-in-time (JIT) compiler. The JVM is an extremely popular compiling VM for running code in a portable manner.
-
-JDBC provides extraordinary database driver portability. ODBC drivers are shipped as OS and architecture native binaries; database vendors must maintain versions for each architecture/OS version that they wish to support. On the other hand, vendors can ship a single JDBC driver that is compatible with any JVM language (e.g., Java, Scala, Clojure, or Kotlin) and JVM data framework (i.e., Spark.) JDBC has become so popular that it is also used as an interface for non-JVM languages such as Python; the Python ecosystem provides translation tools that allow Python code to talk to a JDBC driver running on a local JVM.
-
-JDBC and ODBC are used extensively for data ingestion from relational databases, returning to the general concept of direct database connections. Various enhancements are used to accelerate data ingestion. Many data frameworks can parallelize several simultaneous connections and partition queries to pull data in parallel. On the other hand, nothing is free; using parallel connections also increases the load on the source database.
-
-JDBC and ODBC were long the gold standards for data ingestion from databases, but these connection standards are beginning to show their age for many data engineering applications. These connection standards struggle with nested data, and they send data as rows. This means that native nested data must be reencoded as string data to be sent over the wire, and columns from columnar databases must be reserialized as rows.
-
-As discussed in "File-Based Export and Ingestion", many databases now support native file export that bypasses JDBC/ODBC and exports data directly in formats such as Parquet, ORC, and Avro. Alternatively, many cloud data warehouses provide direct REST APIs.
-
-JDBC connections should generally be integrated with other ingestion technologies. For example, we commonly use a reader process to connect to a database with JDBC, write the extracted data into multiple objects, and then orchestrate ingestion into a downstream system. The reader process can run in a wholly ephemeral cloud instance or in an orchestration system.
-
-### Change Data Capture
-
-Change data capture (CDC), introduced in Chapter 2, is the process of ingesting changes from a source database system. For example, we might have a source PostgreSQL system that supports an application and periodically or continuously ingests table changes for analytics.
-
-Note that our discussion here is by no means exhaustive. We introduce you to common patterns but suggest that you read the documentation on a particular database to handle the details of CDC strategies.
-
-#### Batch-oriented CDC
-
-If the database table in question has an updated_at field containing the last time a record was written or updated, we can query the table to find all updated rows since a specified time. We set the filter timestamp based on when we last captured changed rows from the tables. This process allows us to pull changes and differentially update a target table.
-
-This form of batch-oriented CDC has a key limitation: while we can easily determine which rows have changed since a point in time, we don't necessarily obtain all changes that were applied to these rows. Consider the example of running batch CDC on a bank account table every 24 hours. This operational table shows the current account balance for each account. When money is moved in and out of accounts, the banking application runs a transaction to update the balance.
-
-When we run a query to return all rows in the account table that changed in the last 24 hours, we'll see records for each account that recorded a transaction. Suppose that a certain customer withdrew money five times using a debit card in the last 24 hours. Our query will return only the last account balance recorded in the 24 hour period; other records over the period won't appear. This issue can be mitigated by utilizing an insert-only schema, where each account transaction is recorded as a new record in the table (see "Insert-Only").
+**In plain English:** Metadata is data about data - like the information card at a museum that tells you about a painting (artist, date, medium) rather than the painting itself.
+
+**In technical terms:** Metadata describes characteristics of data - schema, lineage, quality metrics, access patterns, creation timestamps, and more.
+
+**Why it matters:** One significant limitation of early data lakes (data swamps) was complete lack of attention to metadata. Without detailed description of data, it may be of little value.
+
+### 3.8. Push Versus Pull Versus Poll Patterns
+
+<DiagramContainer title="Data Movement Patterns">
+  <Row gap="lg">
+    <Column gap="sm" align="center">
+      <Box color={colors.blue} variant="filled" icon="⬅️">Push</Box>
+      <Box color={colors.slate} variant="subtle">
+        Source sends to target
+      </Box>
+      <Arrow direction="right" label="Data" />
+      <Box color={colors.blue} variant="outlined">Example: CDC to stream</Box>
+    </Column>
+    <Column gap="sm" align="center">
+      <Box color={colors.purple} variant="filled" icon="➡️">Pull</Box>
+      <Box color={colors.slate} variant="subtle">
+        Target reads from source
+      </Box>
+      <Arrow direction="left" label="Query" />
+      <Box color={colors.purple} variant="outlined">Example: JDBC connection</Box>
+    </Column>
+    <Column gap="sm" align="center">
+      <Box color={colors.green} variant="filled" icon="🔄">Poll</Box>
+      <Box color={colors.slate} variant="subtle">
+        Periodically check for changes
+      </Box>
+      <Arrow direction="down" label="Check → Pull if changed" />
+      <Box color={colors.green} variant="outlined">Example: API polling</Box>
+    </Column>
+  </Row>
+</DiagramContainer>
+
+**In plain English:**
+- **Push:** Like getting mail delivered to your mailbox - the postal service brings it to you
+- **Pull:** Like going to the post office to pick up a package - you go get it yourself
+- **Poll:** Like checking your mailbox every hour to see if anything new arrived - you periodically check and grab it if there's something new
+
+---
+
+## 4. Batch Ingestion Considerations
+
+**In plain English:** Batch ingestion is like doing laundry - you collect dirty clothes over time, then wash them all at once rather than washing each item individually as it gets dirty.
+
+**In technical terms:** Batch ingestion involves processing data in bulk, ingesting a subset of data from a source system based either on time intervals or size of accumulated data.
+
+**Common Patterns:**
+
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Time-Interval Batch",
+      icon: "⏰",
+      color: colors.blue,
+      items: [
+        "Process data once a day",
+        "Overnight during off-hours",
+        "Provide daily reporting",
+        "Traditional ETL pattern"
+      ]
+    },
+    {
+      title: "Size-Based Batch",
+      icon: "📦",
+      color: colors.purple,
+      items: [
+        "Move from streaming to object storage",
+        "Cut data into discrete blocks",
+        "Based on bytes or event count",
+        "Data lake ingestion"
+      ]
+    }
+  ]}
+/>
+
+### 4.1. Snapshot or Differential Extraction
+
+<ComparisonTable
+  beforeTitle="Full Snapshot"
+  afterTitle="Differential (Incremental)"
+  beforeColor={colors.orange}
+  afterColor={colors.green}
+  items={[
+    {
+      label: "What's Captured",
+      before: "Entire current state of source",
+      after: "Only updates since last read"
+    },
+    {
+      label: "Network Traffic",
+      before: "High - all data every time",
+      after: "Low - only changes"
+    },
+    {
+      label: "Storage Usage",
+      before: "High - duplicate data",
+      after: "Low - minimal duplication"
+    },
+    {
+      label: "Complexity",
+      before: "Simple to implement",
+      after: "More complex logic"
+    },
+    {
+      label: "Prevalence",
+      before: "Extremely common",
+      after: "Ideal but less common"
+    }
+  ]}
+/>
+
+**In plain English:** Full snapshots are like taking a complete photo of your room every day - simple but wastes space storing duplicate furniture. Differential updates are like noting "added chair, removed lamp" - efficient but requires tracking what changed.
+
+### 4.2. File-Based Export and Ingestion
+
+**In plain English:** File-based ingestion is like getting a package delivery - the sender prepares the package on their end, boxes it up, and ships it to you. You don't need direct access to their warehouse.
+
+**In technical terms:** Data is serialized into files in an exchangeable format on the source system side. These files are provided to an ingestion system via various methods. This is a push-based ingestion pattern.
+
+**Advantages:**
+
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Security",
+      icon: "🔒",
+      color: colors.blue,
+      items: [
+        "No direct backend access",
+        "Source controls export",
+        "Preprocessed data",
+        "Reduced attack surface"
+      ]
+    },
+    {
+      title: "Control",
+      icon: "🎛️",
+      color: colors.purple,
+      items: [
+        "Source engineers choose what to export",
+        "Control preprocessing",
+        "Flexible exchange methods",
+        "Managed process"
+      ]
+    },
+    {
+      title: "Exchange Methods",
+      icon: "📤",
+      color: colors.green,
+      items: [
+        "Object storage (S3, GCS)",
+        "SFTP",
+        "EDI",
+        "SCP"
+      ]
+    }
+  ]}
+/>
+
+### 4.3. ETL Versus ELT
+
+Both are extremely common ingestion, storage, and transformation patterns for batch workloads.
+
+<DiagramContainer title="ETL Pattern">
+  <ProcessFlow
+    direction="horizontal"
+    steps={[
+      {
+        title: "Extract",
+        description: "Get data from source (pull or push)",
+        icon: "📤",
+        color: colors.blue
+      },
+      {
+        title: "Transform",
+        description: "Clean, enrich, aggregate BEFORE loading",
+        icon: "⚙️",
+        color: colors.purple
+      },
+      {
+        title: "Load",
+        description: "Load transformed data into storage",
+        icon: "💾",
+        color: colors.green
+      }
+    ]}
+  />
+</DiagramContainer>
+
+<DiagramContainer title="ELT Pattern">
+  <ProcessFlow
+    direction="horizontal"
+    steps={[
+      {
+        title: "Extract",
+        description: "Get data from source (pull or push)",
+        icon: "📤",
+        color: colors.blue
+      },
+      {
+        title: "Load",
+        description: "Load raw data into storage first",
+        icon: "💾",
+        color: colors.green
+      },
+      {
+        title: "Transform",
+        description: "Transform AFTER loading using storage compute",
+        icon: "⚙️",
+        color: colors.purple
+      }
+    ]}
+  />
+</DiagramContainer>
+
+**Key Considerations:**
+
+- **Extract:** May require reading metadata and schema changes
+- **Load:** Be mindful of system type, schema, and performance impact
+
+> **Insight**
+>
+> We cover ETL and ELT in greater detail in Chapter 8 (Transformation).
+
+### 4.4. Inserts, Updates, and Batch Size
+
+**In plain English:** Batch-oriented systems are like moving furniture - it's much more efficient to load a whole truckload at once than make 100 trips with individual chairs.
+
+**In technical terms:** Batch-oriented systems often perform poorly with many small operations rather than fewer large operations. Single-row inserts are fine for transactional databases but bad for columnar databases.
+
+**Why it matters:**
+
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Small Batch Problems",
+      icon: "⚠️",
+      color: colors.red,
+      items: [
+        "Creates many small files",
+        "High number of create operations",
+        "Forces database to scan files",
+        "Poor performance"
+      ]
+    },
+    {
+      title: "Purpose-Built Solutions",
+      icon: "⚡",
+      color: colors.green,
+      items: [
+        "Apache Druid - high insert rates",
+        "Apache Pinot - high insert rates",
+        "SingleStore - hybrid OLAP/OLTP",
+        "BigQuery - stream buffer"
+      ]
+    }
+  ]}
+/>
+
+> **Insight**
+>
+> Know the limits and characteristics of your tools. Understand appropriate update patterns for the database or data store you're working with.
+
+### 4.5. Data Migration
+
+**In plain English:** Data migration is like moving to a new house - you don't just need to move your stuff, you need to reconnect utilities, update your address, and figure out where everything goes in the new place.
+
+**In technical terms:** Migrating data to a new database or environment involves moving data in bulk - sometimes hundreds of terabytes or larger, often including entire databases and systems.
+
+**Key Challenges:**
+
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Schema Management",
+      icon: "📋",
+      color: colors.orange,
+      items: [
+        "Subtle differences between systems",
+        "SQL Server to Snowflake example",
+        "Test sample data first",
+        "Find issues before full migration"
+      ]
+    },
+    {
+      title: "Pipeline Connections",
+      icon: "🔌",
+      color: colors.red,
+      items: [
+        "Not just moving data itself",
+        "Moving pipeline connections",
+        "Updating all downstream systems",
+        "Often the bigger challenge"
+      ]
+    }
+  ]}
+/>
+
+**Best Practices:**
+
+- Most systems perform best with bulk rather than individual rows
+- File/object storage excellent intermediate stage
+- Many automation tools available
+- Use automation for large/complex migrations
+
+---
+
+## 5. Message and Stream Ingestion Considerations
+
+Ingesting event data is common. This section covers issues to consider when ingesting events.
+
+### 5.1. Schema Evolution
+
+**In plain English:** Schema evolution is like updating your tax form - the IRS might add new fields each year, change field names, or modify what types of data go where. Your tax software needs to handle these changes gracefully.
+
+**In technical terms:** Fields may be added or removed, or value types might change (string to integer). Schema evolution can have unintended impacts on pipelines and destinations.
+
+**Common Scenarios:**
+
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "IoT Firmware Update",
+      icon: "📱",
+      color: colors.blue,
+      items: [
+        "Device gets firmware update",
+        "Adds new field to event",
+        "Downstream unprepared",
+        "Pipeline breaks"
+      ]
+    },
+    {
+      title: "Third-Party API Change",
+      icon: "🔌",
+      color: colors.purple,
+      items: [
+        "API introduces changes",
+        "Event payload modified",
+        "No advance notice",
+        "Impacts capabilities"
+      ]
+    },
+    {
+      title: "Application Update",
+      icon: "💻",
+      color: colors.green,
+      items: [
+        "App adds new feature",
+        "Changes data structure",
+        "Breaking change",
+        "Consumers affected"
+      ]
+    }
+  ]}
+/>
+
+**Mitigation Strategies:**
+
+<ProcessFlow
+  direction="vertical"
+  steps={[
+    {
+      title: "Use Schema Registry",
+      description: "Version schema changes if framework supports it",
+      icon: "📚",
+      color: colors.blue
+    },
+    {
+      title: "Dead-Letter Queue",
+      description: "Investigate issues with improperly handled events",
+      icon: "📬",
+      color: colors.purple
+    },
+    {
+      title: "Communication (Most Effective)",
+      description: "Regularly communicate with upstream stakeholders about potential changes",
+      icon: "💬",
+      color: colors.green
+    }
+  ]}
+/>
+
+### 5.2. Late-Arriving Data
+
+**In plain English:** Late-arriving data is like mail that takes extra time to arrive - a letter postmarked Monday might not arrive until Wednesday due to postal delays. The postmark (event time) and arrival (ingestion time) are different.
+
+**In technical terms:** Events might occur around the same time frame (similar event times), but some arrive later than others (late ingestion times) because of various circumstances.
+
+**Example Scenario:**
+
+> An IoT device might be late sending a message because of internet latency issues. This is common when ingesting data.
+
+**Impact:**
+
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Reporting Issues",
+      icon: "📊",
+      color: colors.red,
+      items: [
+        "Assuming ingestion time = event time",
+        "Strange results in reports",
+        "Inaccurate portrayal of events",
+        "Misleading analysis"
+      ]
+    },
+    {
+      title: "Handling Strategy",
+      icon: "⏰",
+      color: colors.green,
+      items: [
+        "Be aware of late-arriving data",
+        "Understand downstream impact",
+        "Set cutoff time for processing",
+        "Balance accuracy vs completeness"
+      ]
+    }
+  ]}
+/>
+
+### 5.3. Ordering and Multiple Delivery
+
+**In plain English:** Streaming platforms are like a busy mail room - letters might arrive out of order, and sometimes the same letter gets delivered twice by mistake because the system isn't sure if it was delivered the first time.
+
+**In technical terms:** Distributed systems can cause complications - messages may be delivered out of order and more than once (at-least-once delivery).
+
+> **Insight**
+>
+> See the event-streaming platforms discussion in Chapter 5 for more details on handling ordering and delivery guarantees.
+
+### 5.4. Replay
+
+**In plain English:** Replay is like rewinding a DVR - you can go back to any point in your recorded history and watch it again from there.
+
+**In technical terms:** Replay allows readers to request a range of messages from history, rewinding event history to a particular point in time. Particularly useful when you need to reingest and reprocess data for a specific time range.
+
+**Platform Support:**
+
+<ComparisonTable
+  beforeTitle="No Replay"
+  afterTitle="Replay Supported"
+  beforeColor={colors.red}
+  afterColor={colors.green}
+  items={[
+    {
+      label: "RabbitMQ",
+      before: "Deletes after consumption",
+      after: "N/A"
+    },
+    {
+      label: "Kafka",
+      before: "N/A",
+      after: "Event retention and replay"
+    },
+    {
+      label: "Kinesis",
+      before: "N/A",
+      after: "Event retention and replay"
+    },
+    {
+      label: "Pub/Sub",
+      before: "N/A",
+      after: "Event retention and replay"
+    }
+  ]}
+/>
+
+### 5.5. Time to Live
+
+**In plain English:** Time to Live (TTL) is like milk with an expiration date - after a certain time, it gets thrown out automatically whether you used it or not.
+
+**In technical terms:** TTL is maximum message retention time - how long events live before being acknowledged and ingested. Unacknowledged events not ingested after TTL expiration automatically disappear.
+
+**Why it matters:** Helpful to reduce backpressure and unnecessary event volume in event-ingestion pipeline.
+
+**Finding the Balance:**
+
+<DiagramContainer title="TTL Trade-offs">
+  <Row gap="lg">
+    <Column gap="sm" align="center">
+      <Box color={colors.red} variant="filled" icon="⚡">Too Short</Box>
+      <Box color={colors.slate} variant="subtle">Milliseconds or seconds</Box>
+      <Box color={colors.red} variant="outlined">Most messages disappear before processing</Box>
+    </Column>
+    <Column gap="sm" align="center">
+      <Box color={colors.green} variant="filled" icon="✅">Balanced</Box>
+      <Box color={colors.slate} variant="subtle">Hours to days</Box>
+      <Box color={colors.green} variant="outlined">Enough time to process, minimal backlog</Box>
+    </Column>
+    <Column gap="sm" align="center">
+      <Box color={colors.orange} variant="filled" icon="📦">Too Long</Box>
+      <Box color={colors.slate} variant="subtle">Weeks or months</Box>
+      <Box color={colors.orange} variant="outlined">Backlog of unprocessed messages, long waits</Box>
+    </Column>
+  </Row>
+</DiagramContainer>
+
+**Platform Examples (at time of writing):**
+
+- **Google Cloud Pub/Sub:** Up to 7 days retention
+- **Amazon Kinesis:** Up to 365 days retention
+- **Kafka:** Indefinite (limited by disk space), can write to object storage
+
+### 5.6. Message Size
+
+**In plain English:** Message size limits are like package size limits for shipping - you can't send a piano through a mail slot designed for letters.
+
+**In technical terms:** Ensure the streaming framework can handle the maximum expected message size.
+
+**Platform Limits:**
+
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Amazon Kinesis",
+      icon: "📨",
+      color: colors.orange,
+      items: [
+        "Maximum: 1 MB",
+        "Fixed limit",
+        "Design messages accordingly",
+        "Split large payloads if needed"
+      ]
+    },
+    {
+      title: "Apache Kafka",
+      icon: "📬",
+      color: colors.blue,
+      items: [
+        "Default: 1 MB",
+        "Configurable to 20 MB+",
+        "May vary on managed platforms",
+        "Check platform documentation"
+      ]
+    }
+  ]}
+/>
+
+### 5.7. Error Handling and Dead-Letter Queues
+
+**In plain English:** A dead-letter queue is like the "undeliverable mail" section at the post office - when a letter can't be delivered (wrong address, postage due, damaged), it goes to a special place where postal workers can investigate and try to resolve the issue.
+
+**In technical terms:** Events that cannot be ingested are rerouted to a separate location called a dead-letter queue, segregating problematic events from events that can be accepted.
+
+**Why it matters:**
+
+<DiagramContainer title="Dead-Letter Queue Flow">
+  <ProcessFlow
+    direction="horizontal"
+    steps={[
+      {
+        title: "Incoming Events",
+        description: "Messages arrive at queue",
+        icon: "📨",
+        color: colors.blue
+      },
+      {
+        title: "Validation",
+        description: "Check if event can be processed",
+        icon: "✅",
+        color: colors.purple
+      },
+      {
+        title: "Good Events",
+        description: "Route to consumer",
+        icon: "✔️",
+        color: colors.green
+      }
+    ]}
+  />
+  <Arrow direction="down" label="Bad events" />
+  <Box color={colors.red} variant="filled" icon="📬">
+    Dead-Letter Queue
+  </Box>
+</DiagramContainer>
+
+**Common Failure Reasons:**
+
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Routing Issues",
+      icon: "🚫",
+      color: colors.red,
+      items: [
+        "Nonexistent topic",
+        "Nonexistent queue",
+        "Invalid destination",
+        "Permission denied"
+      ]
+    },
+    {
+      title: "Size Issues",
+      icon: "📏",
+      color: colors.orange,
+      items: [
+        "Message too large",
+        "Exceeds platform limits",
+        "Malformed payload",
+        "Corrupted data"
+      ]
+    },
+    {
+      title: "Timing Issues",
+      icon: "⏰",
+      color: colors.purple,
+      items: [
+        "Expired past TTL",
+        "Too old to process",
+        "Out of order",
+        "Duplicate detection"
+      ]
+    }
+  ]}
+/>
+
+**Benefits:**
+
+- Diagnose why ingestion errors occur
+- Solve data pipeline problems
+- Reprocess messages after fixing underlying causes
+- Prevent erroneous events from blocking other messages
+
+### 5.8. Consumer Pull and Push
+
+<ComparisonTable
+  beforeTitle="Pull Subscriptions"
+  afterTitle="Push Subscriptions"
+  beforeColor={colors.blue}
+  afterColor={colors.purple}
+  items={[
+    {
+      label: "How It Works",
+      before: "Subscribers read from topic and confirm",
+      after: "Service writes messages to listener"
+    },
+    {
+      label: "Kafka",
+      before: "Pull only",
+      after: "Not supported"
+    },
+    {
+      label: "Kinesis",
+      before: "Pull only",
+      after: "Not supported"
+    },
+    {
+      label: "Pub/Sub",
+      before: "Supported",
+      after: "Supported"
+    },
+    {
+      label: "RabbitMQ",
+      before: "Supported",
+      after: "Supported"
+    },
+    {
+      label: "Default Choice",
+      before: "Most data engineering applications",
+      after: "Specialized applications"
+    }
+  ]}
+/>
+
+> **Insight**
+>
+> Pull-only systems can still push if you add an extra layer to handle this.
+
+### 5.9. Location
+
+**In plain English:** Location is like choosing where to build distribution centers - putting them closer to customers improves delivery speed but increases costs when coordinating between centers.
+
+**In technical terms:** It's often desirable to integrate streaming across several locations for enhanced redundancy and to consume data close to where it's generated.
+
+**Trade-offs:**
+
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Benefits of Proximity",
+      icon: "⚡",
+      color: colors.green,
+      items: [
+        "Better bandwidth",
+        "Lower latency",
+        "Faster processing",
+        "Enhanced redundancy"
+      ]
+    },
+    {
+      title: "Costs of Distribution",
+      icon: "💰",
+      color: colors.red,
+      items: [
+        "Data egress fees",
+        "Cross-region transfer costs",
+        "Complex architecture",
+        "Can spiral quickly"
+      ]
+    }
+  ]}
+/>
+
+> **Insight**
+>
+> Do a careful evaluation of trade-offs as you build out your architecture. Balance performance benefits against data movement costs.
+
+---
+
+## 6. Ways to Ingest Data
+
+Now that we've described significant patterns underlying batch and streaming ingestion, let's focus on ways you can ingest data.
+
+> **Insight**
+>
+> The universe of data ingestion practices and technologies is vast and growing daily. These are common approaches, but not exhaustive.
+
+### 6.1. Direct Database Connection
+
+**In plain English:** Direct database connection is like having a phone line between two offices - you can call directly and request information without going through intermediaries.
+
+**In technical terms:** Data is pulled from databases by querying and reading over a network connection, most commonly using ODBC or JDBC.
+
+#### ODBC (Open Database Connectivity)
+
+<DiagramContainer title="ODBC Architecture">
+  <ProcessFlow
+    direction="horizontal"
+    steps={[
+      {
+        title: "Ingestion Tool",
+        description: "Makes standard ODBC API calls",
+        icon: "🔧",
+        color: colors.blue
+      },
+      {
+        title: "ODBC Driver",
+        description: "Translates to database-specific commands",
+        icon: "🔌",
+        color: colors.purple
+      },
+      {
+        title: "Database",
+        description: "Returns query results over wire",
+        icon: "💾",
+        color: colors.green
+      }
+    ]}
+  />
+</DiagramContainer>
+
+#### JDBC (Java Database Connectivity)
+
+**Why JDBC is Popular:**
+
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "JVM Portability",
+      icon: "☕",
+      color: colors.blue,
+      items: [
+        "Standard across architectures",
+        "Portable across OS",
+        "JIT compiler performance",
+        "Extremely popular"
+      ]
+    },
+    {
+      title: "Single Driver",
+      icon: "🔧",
+      color: colors.purple,
+      items: [
+        "Compatible with any JVM language",
+        "Java, Scala, Clojure, Kotlin",
+        "Works with Spark",
+        "No separate drivers needed"
+      ]
+    },
+    {
+      title: "Beyond JVM",
+      icon: "🐍",
+      color: colors.green,
+      items: [
+        "Python can use JDBC",
+        "Translation tools available",
+        "Python talks to local JVM",
+        "Widely adopted"
+      ]
+    }
+  ]}
+/>
+
+#### Limitations and Modern Alternatives
+
+<ComparisonTable
+  beforeTitle="JDBC/ODBC Limitations"
+  afterTitle="Modern Alternatives"
+  beforeColor={colors.red}
+  afterColor={colors.green}
+  items={[
+    {
+      label: "Nested Data",
+      before: "Struggle with nested structures",
+      after: "Native nested data support"
+    },
+    {
+      label: "Data Format",
+      before: "Send data as rows",
+      after: "Columnar formats (Parquet, ORC)"
+    },
+    {
+      label: "Reencoding",
+      before: "Must reserialize columns as rows",
+      after: "Direct export to native format"
+    },
+    {
+      label: "Access Method",
+      before: "JDBC/ODBC connections",
+      after: "REST APIs, file export"
+    }
+  ]}
+/>
+
+**Modern Integration Pattern:**
+
+<DiagramContainer title="JDBC with Orchestration">
+  <ProcessFlow
+    direction="horizontal"
+    steps={[
+      {
+        title: "Reader Process",
+        description: "Connect via JDBC to database",
+        icon: "📖",
+        color: colors.blue
+      },
+      {
+        title: "Object Storage",
+        description: "Write extracted data to multiple objects",
+        icon: "💾",
+        color: colors.purple
+      },
+      {
+        title: "Orchestration",
+        description: "Trigger ingestion to downstream system",
+        icon: "🎯",
+        color: colors.green
+      }
+    ]}
+  />
+</DiagramContainer>
+
+### 6.2. Change Data Capture
+
+**In plain English:** Change Data Capture (CDC) is like having a security camera that records every change in a room - you can see who came in, what they moved, and when they left. Instead of taking a new photo of the whole room each hour, you just review the recording of changes.
+
+**In technical terms:** CDC is the process of ingesting changes from a source database system - periodically or continuously capturing table changes for analytics.
+
+#### Batch-Oriented CDC
+
+**How It Works:**
+
+If database table has `updated_at` field, query to find all rows updated since specified time.
+
+<ProcessFlow
+  direction="horizontal"
+  steps={[
+    {
+      title: "Last Capture Time",
+      description: "Track when we last captured changes",
+      icon: "⏰",
+      color: colors.blue
+    },
+    {
+      title: "Query Updates",
+      description: "Find rows changed since last time",
+      icon: "🔍",
+      color: colors.purple
+    },
+    {
+      title: "Differential Update",
+      description: "Update only changed rows in target",
+      icon: "📝",
+      color: colors.green
+    }
+  ]}
+/>
+
+**Key Limitation:**
+
+:::warning Batch CDC Limitation
+
+While we can determine which rows changed since a point in time, we don't necessarily obtain **all changes** applied to those rows.
+
+**Example:** Bank account table updated every 24 hours. Customer withdraws money 5 times in 24 hours. Query returns only the **last** account balance, not all 5 intermediate states.
+
+**Mitigation:** Use insert-only schema where each transaction is a new record.
+
+:::
 
 #### Continuous CDC
 
-Continuous CDC captures all table history and can support near real-time data ingestion, either for real-time database replication or to feed real-time streaming analytics. Rather than running periodic queries to get a batch of table changes, continuous CDC treats each write to the database as an event.
-
-We can capture an event stream for continuous CDC in a couple of ways. One of the most common approaches with a transactional database such as PostgreSQL is log-based CDC. The database binary log records every change to the database sequentially (see "Database Logs"). A CDC tool can read this log and send the events to a target, such as the Apache Kafka Debezium streaming platform.
-
-Some databases support a simplified, managed CDC paradigm. For instance, many cloud-hosted databases can be configured to directly trigger a serverless function or write to an event stream every time a change happens in the database. This completely frees engineers from worrying about the details of how events are captured in the database and forwarded.
-
-#### CDC and database replication
-
-CDC can be used to replicate between databases: events are buffered into a stream and asynchronously written into a second database. However, many databases natively support a tightly coupled version of replication (synchronous replication) that keeps the replica fully in sync with the primary database. Synchronous replication typically requires that the primary database and the replica are of the same type (e.g., PostgreSQL to PostgreSQL). The advantage of synchronous replication is that the secondary database can offload work from the primary database by acting as a read replica; read queries can be redirected to the replica. The query will return the same results that would be returned from the primary database.
-
-Read replicas are often used in batch data ingestion patterns to allow large scans to run without overloading the primary production database. In addition, an application can be configured to fail over to the replica if the primary database becomes unavailable. No data will be lost in the failover because the replica is entirely in sync with the primary database.
-
-The advantage of asynchronous CDC replication is a loosely coupled architecture pattern. While the replica might be slightly delayed from the primary database, this is often not a problem for analytics applications, and events can now be directed to a variety of targets; we might run CDC replication while simultaneously directing events to object storage and a streaming analytics processor.
-
-#### CDC considerations
-
-Like anything in technology, CDC is not free. CDC consumes various database resources, such as memory, disk bandwidth, storage, CPU time, and network bandwidth. Engineers should work with production teams and run tests before turning on CDC on production systems to avoid operational problems. Similar considerations apply to synchronous replication.
-
-For batch CDC, be aware that running any large batch query against a transactional production system can cause excessive load. Either run such queries only at off-hours or use a read replica to avoid burdening the primary database.
-
-### APIs
-
-> The bulk of software engineering is just plumbing.
-> — Karl Hughes
-
-As we mentioned in Chapter 5, APIs are a data source that continues to grow in importance and popularity. A typical organization may have hundreds of external data sources such as SaaS platforms or partner companies. The hard reality is that no proper standard exists for data exchange over APIs. Data engineers can spend a significant amount of time reading documentation, communicating with external data owners, and writing and maintaining API connection code.
-
-Three trends are slowly changing this situation. First, many vendors provide API client libraries for various programming languages that remove much of the complexity of API access.
-
-Second, numerous data connector platforms are available now as SaaS, open source, or managed open source. These platforms provide turnkey data connectivity to many data sources; they offer frameworks for writing custom connectors for unsupported data sources. See "Managed Data Connectors".
-
-The third trend is the emergence of data sharing (discussed in Chapter 5)—i.e., the ability to exchange data through a standard platform such as BigQuery, Snowflake, Redshift, or S3. Once data lands on one of these platforms, it is straightforward to store it, process it, or move it somewhere else. Data sharing has had a large and rapid impact in the data engineering space.
-
-Don't reinvent the wheel when data sharing is not an option and direct API access is necessary. While a managed service might look like an expensive option, consider the value of your time and the opportunity cost of building API connectors when you could be spending your time on higher-value work.
-
-In addition, many managed services now support building custom API connectors. This may provide API technical specifications in a standard format or writing connector code that runs in a serverless function framework (e.g., AWS Lambda) while letting the managed service handle the details of scheduling and synchronization. Again, these services can be a huge time-saver for engineers, both for development and ongoing maintenance.
-
-Reserve your custom connection work for APIs that aren't well supported by existing frameworks; you will find that there are still plenty of these to work on. Handling custom API connections has two main aspects: software development and ops. Follow software development best practices; you should use version control, continuous delivery, and automated testing. In addition to following DevOps best practices, consider an orchestration framework, which can dramatically streamline the operational burden of data ingestion.
-
-### Message Queues and Event-Streaming Platforms
-
-Message queues and event-streaming platforms are widespread ways to ingest real-time data from web and mobile applications, IoT sensors, and smart devices. As real-time data becomes more ubiquitous, you'll often find yourself either introducing or retrofitting ways to handle real-time data in your ingestion workflows. As such, it's essential to know how to ingest real-time data. Popular real-time data ingestion includes message queues or event-streaming platforms, which we covered in Chapter 5. Though these are both source systems, they also act as ways to ingest data. In both cases, you consume events from the publisher you subscribe to.
-
-Recall the differences between messages and streams. A message is handled at the individual event level and is meant to be transient. Once a message is consumed, it is acknowledged and removed from the queue. On the other hand, a stream ingests events into an ordered log. The log persists for as long as you wish, allowing events to be queried over various ranges, aggregated, and combined with other streams to create new transformations published to downstream consumers. In the following figure, we have two producers (producers 1 and 2) sending events to two consumers (consumers 1 and 2). These events are combined into a new dataset and sent to a producer for downstream consumption.
-
-The last point is an essential difference between batch and streaming ingestion. Whereas batch usually involves static workflows (ingest data, store it, transform it, and serve it), messages and streams are fluid. Ingestion can be nonlinear, with data being published, consumed, republished, and reconsumed. When designing your real-time ingestion workflows, keep in mind how data will flow.
-
-Another consideration is the throughput of your real-time data pipelines. Messages and events should flow with as little latency as possible, meaning you should provision adequate partition (or shard) bandwidth and throughput. Provide sufficient memory, disk, and CPU resources for event processing, and if you're managing your real-time pipelines, incorporate autoscaling to handle spikes and save money as load decreases. For these reasons, managing your streaming platform can entail significant overhead. Consider managed services for your real-time ingestion pipelines, and focus your attention on ways to get value from your real-time data.
-
-### Managed Data Connectors
-
-These days, if you're considering writing a data ingestion connector to a database or API, ask yourself: has this already been created? Furthermore, is there a service that will manage the nitty-gritty details of this connection for me? "APIs" mentions the popularity of managed data connector platforms and frameworks. These tools aim to provide a standard set of connectors available out of the box to spare data engineers building complicated plumbing to connect to a particular source. Instead of creating and managing a data connector, you outsource this service to a third party.
-
-Generally, options in the space allow users to set a target and source, ingest in various ways (e.g., CDC, replication, truncate and reload), set permissions and credentials, configure an update frequency, and begin syncing data. The vendor or cloud behind the scenes fully manages and monitors data syncs. If data synchronization fails, you'll receive an alert with logged information on the cause of the error.
-
-We suggest using managed connector platforms instead of creating and managing your connectors. Vendors and OSS projects each typically have hundreds of prebuilt connector options and can easily create custom connectors. The creation and management of data connectors is largely undifferentiated heavy lifting these days and should be outsourced whenever possible.
-
-### Moving Data with Object Storage
-
-Object storage is a multitenant system in public clouds, and it supports storing massive amounts of data. This makes object storage ideal for moving data in and out of data lakes, between teams, and transferring data between organizations. You can even provide short-term access to an object with a signed URL, giving a user temporary permission.
-
-In our view, object storage is the most optimal and secure way to handle file exchange. Public cloud storage implements the latest security standards, has a robust track record of scalability and reliability, accepts files of arbitrary types and sizes, and provides high-performance data movement. We discussed object storage much more extensively in Chapter 6.
-
-### EDI
-
-Another practical reality for data engineers is electronic data interchange (EDI). The term is vague enough to refer to any data movement method. It usually refers to somewhat archaic means of file exchange, such as by email or flash drive. Data engineers will find that some data sources do not support more modern means of data transport, often because of archaic IT systems or human process limitations.
-
-Engineers can at least enhance EDI through automation. For example, they can set up a cloud-based email server that saves files onto company object storage as soon as they are received. This can trigger orchestration processes to ingest and process data. This is much more robust than an employee downloading the attached file and manually uploading it to an internal system, which we still frequently see.
-
-### Databases and File Export
-
-Engineers should be aware of how the source database systems handle file export. Export involves large data scans that significantly load the database for many transactional systems. Source system engineers must assess when these scans can be run without affecting application performance and might opt for a strategy to mitigate the load. Export queries can be broken into smaller exports by querying over key ranges or one partition at a time. Alternatively, a read replica can reduce load. Read replicas are especially appropriate if exports happen many times a day and coincide with a high source system load.
-
-Major cloud data warehouses are highly optimized for direct file export. For example, Snowflake, BigQuery, Redshift, and others support direct export to object storage in various formats.
-
-### Practical Issues with Common File Formats
-
-Engineers should also be aware of the file formats to export. CSV is still ubiquitous and highly error prone at the time of this writing. Namely, CSV's default delimiter is also one of the most familiar characters in the English language—the comma! But it gets worse.
-
-CSV is by no means a uniform format. Engineers must stipulate the delimiter, quote characters, and escaping to appropriately handle the export of string data. CSV also doesn't natively encode schema information or directly support nested structures. CSV file encoding and schema information must be configured in the target system to ensure appropriate ingestion. Autodetection is a convenience feature provided in many cloud environments but is inappropriate for production ingestion. As a best practice, engineers should record CSV encoding and schema details in file metadata.
-
-More robust and expressive export formats include Parquet, Avro, Arrow, and ORC or JSON. These formats natively encode schema information and handle arbitrary string data with no particular intervention. Many of them also handle nested data structures natively so that JSON fields are stored using internal nested structures rather than simple strings. For columnar databases, columnar formats (Parquet, Arrow, ORC) allow more efficient data export because columns can be directly transcoded between formats. These formats are also generally more optimized for query engines. The Arrow file format is designed to map data directly into processing engine memory, providing high performance in data lake environments.
-
-The disadvantage of these newer formats is that many of them are not natively supported by source systems. Data engineers are often forced to work with CSV data and then build robust exception handling and error detection to ensure data quality on ingestion. See Appendix A for a more extensive discussion of file formats.
-
-### Shell
-
-The shell is an interface by which you may execute commands to ingest data. The shell can be used to script workflows for virtually any software tool, and shell scripting is still used extensively in ingestion processes. A shell script might read data from a database, reserialize it into a different file format, upload it to object storage, and trigger an ingestion process in a target database. While storing data on a single instance or server is not highly scalable, many of our data sources are not particularly large, and such approaches work just fine.
-
-In addition, cloud vendors generally provide robust CLI-based tools. It is possible to run complex ingestion processes simply by issuing commands to the AWS CLI. As ingestion processes grow more complicated and the SLA grows more stringent, engineers should consider moving to a proper orchestration system.
-
-### SSH
-
-SSH is not an ingestion strategy but a protocol used with other ingestion strategies. We use SSH in a few ways. First, SSH can be used for file transfer with SCP, as mentioned earlier. Second, SSH tunnels are used to allow secure, isolated connections to databases.
-
-Application databases should never be directly exposed on the internet. Instead, engineers can set up a bastion host—i.e., an intermediate host instance that can connect to the database in question. This host machine is exposed on the internet, although locked down for minimal access from only specified IP addresses to specified ports. To connect to the database, a remote machine first opens an SSH tunnel connection to the bastion host and then connects from the host machine to the database.
-
-### SFTP and SCP
-
-Accessing and sending data both from secure FTP (SFTP) and secure copy (SCP) are techniques you should be familiar with, even if data engineers do not typically use these regularly (IT or security/secOps will handle this).
-
-Engineers rightfully cringe at the mention of SFTP (occasionally, we even hear instances of FTP being used in production). Regardless, SFTP is still a practical reality for many businesses. They work with partner businesses that consume or provide data using SFTP and are unwilling to rely on other standards. To avoid data leaks, security analysis is critical in these situations.
-
-SCP is a file-exchange protocol that runs over an SSH connection. SCP can be a secure file-transfer option if it is configured correctly. Again, adding additional network access control (defense in depth) to enhance SCP security is highly recommended.
-
-### Webhooks
-
-Webhooks, as we discussed in Chapter 5, are often referred to as reverse APIs. For a typical REST data API, the data provider gives engineers API specifications that they use to write their data ingestion code. The code makes requests and receives data in responses.
-
-With a webhook, the data provider defines an API request specification, but the data provider makes API calls rather than receiving them; it's the data consumer's responsibility to provide an API endpoint for the provider to call. The consumer is responsible for ingesting each request and handling data aggregation, storage, and processing.
-
-Webhook-based data ingestion architectures can be brittle, difficult to maintain, and inefficient. Using appropriate off-the-shelf tools, data engineers can build more robust webhook architectures with lower maintenance and infrastructure costs. For example, a webhook pattern in AWS might use a serverless function framework (Lambda) to receive incoming events, a managed event-streaming platform to store and buffer messages (Kinesis), a stream-processing framework to handle real-time analytics (Flink), and an object store for long-term storage (S3).
-
-You'll notice that this architecture does much more than simply ingest the data. This underscores ingestion's entanglement with the other stages of the data engineering lifecycle; it is often impossible to define your ingestion architecture without making decisions about storage and processing.
-
-### Web Interface
-
-Web interfaces for data access remain a practical reality for data engineers. We frequently run into situations where not all data and functionality in a SaaS platform is exposed through automated interfaces such as APIs and file drops. Instead, someone must manually access a web interface, generate a report, and download a file to a local machine. This has obvious drawbacks, such as people forgetting to run the report or having their laptop die. Where possible, choose tools and workflows that allow for automated access to data.
-
-### Web Scraping
-
-Web scraping automatically extracts data from web pages, often by combing the web page's various HTML elements. You might scrape ecommerce sites to extract product pricing information or scrape multiple news sites for your news aggregator. Web scraping is widespread, and you may encounter it as a data engineer. It's also a murky area where ethical and legal lines are blurry.
-
-Here is some top-level advice to be aware of before undertaking any web-scraping project. First, ask yourself if you should be web scraping or if data is available from a third party. If your decision is to web scrape, be a good citizen. Don't inadvertently create a denial-of-service (DoS) attack, and don't get your IP address blocked. Understand how much traffic you generate and pace your web-crawling activities appropriately. Just because you can spin up thousands of simultaneous Lambda functions to scrape doesn't mean you should; excessive web scraping could lead to the disabling of your AWS account.
-
-Second, be aware of the legal implications of your activities. Again, generating DoS attacks can entail legal consequences. Actions that violate terms of service may cause headaches for your employer or you personally.
-
-Third, web pages constantly change their HTML element structure, making it tricky to keep your web scraper updated. Ask yourself, is the headache of maintaining these systems worth the effort?
-
-Web scraping has interesting implications for the data engineering lifecycle processing stage; engineers should think about various factors at the beginning of a web-scraping project. What do you intend to do with the data? Are you just pulling required fields from the scraped HTML by using Python code and then writing these values to a database? Do you intend to maintain the complete HTML code of the scraped websites and process this data using a framework like Spark? These decisions may lead to very different architectures downstream of ingestion.
-
-### Transfer Appliances for Data Migration
-
-For massive quantities of data (100 TB or more), transferring data directly over the internet may be a slow and costly process. At this scale, the fastest, most efficient way to move data is not over the wire but by truck. Cloud vendors offer the ability to send your data via a physical "box of hard drives." Simply order a storage device, called a transfer appliance, load your data from your servers, and then send it back to the cloud vendor, which will upload your data.
-
-The suggestion is to consider using a transfer appliance if your data size hovers around 100 TB. On the extreme end, AWS even offers Snowmobile, a transfer appliance sent to you in a semitrailer! Snowmobile is intended to lift and shift an entire data center, in which data sizes are in the petabytes or greater.
-
-Transfer appliances are handy for creating hybrid-cloud or multicloud setups. For example, Amazon's data transfer appliance (AWS Snowball) supports import and export. To migrate into a second cloud, users can export their data into a Snowball device and then import it into a second transfer appliance to move data into GCP or Azure. This might sound awkward, but even when it's feasible to push data over the internet between clouds, data egress fees make this a costly proposition. Physical transfer appliances are a cheaper alternative when the data volumes are significant.
-
-Remember that transfer appliances and data migration services are one-time data ingestion events and are not suggested for ongoing workloads. Suppose you have workloads requiring constant data movement in either a hybrid or multicloud scenario. In that case, your data sizes are presumably batching or streaming much smaller data sizes on an ongoing basis.
-
-### Data Sharing
-
-Data sharing is growing as a popular option for consuming data (see Chapters 5 and 6). Data providers will offer datasets to third-party subscribers, either for free or at a cost. These datasets are often shared in a read-only fashion, meaning you can integrate these datasets with your own data (and other third-party datasets), but you do not own the shared dataset. In the strict sense, this isn't ingestion, where you get physical possession of the dataset. If the data provider decides to remove your access to a dataset, you'll no longer have access to it.
-
-Many cloud platforms offer data sharing, allowing you to share your data and consume data from various providers. Some of these platforms also provide data marketplaces where companies and organizations can offer their data for sale.
-
-## Whom You'll Work With
-
-Data ingestion sits at several organizational boundaries. In developing and managing data ingestion pipelines, data engineers will work with both people and systems sitting upstream (data producers) and downstream (data consumers).
-
-### Upstream Stakeholders
-
-A significant disconnect often exists between those responsible for generating data—typically, software engineers—and the data engineers who will prepare this data for analytics and data science. Software engineers and data engineers usually sit in separate organizational silos; if they think about data engineers, they typically see them simply as downstream consumers of the data exhaust from their application, not as stakeholders.
-
-We see this current state of affairs as a problem and a significant opportunity. Data engineers can improve the quality of their data by inviting software engineers to be stakeholders in data engineering outcomes. The vast majority of software engineers are well aware of the value of analytics and data science but don't necessarily have aligned incentives to contribute to data engineering efforts directly.
-
-Simply improving communication is a significant first step. Often software engineers have already identified potentially valuable data for downstream consumption. Opening a communication channel encourages software engineers to get data into shape for consumers and communicate about data changes to prevent pipeline regressions.
-
-Beyond communication, data engineers can highlight the contributions of software engineers to team members, executives, and especially product managers. Involving product managers in the outcome and treating downstream data processed as part of a product encourages them to allocate scarce software development to collaboration with data engineers. Ideally, software engineers can work partially as extensions of the data engineering team; this allows them to collaborate on various projects, such as creating an event-driven architecture to enable real-time analytics.
-
-### Downstream Stakeholders
-
-Who is the ultimate customer for data ingestion? Data engineers focus on data practitioners and technology leaders such as data scientists, analysts, and chief technical officers. They would do well also to remember their broader circle of business stakeholders such as marketing directors, vice presidents over the supply chain, and CEOs.
-
-Too often, we see data engineers pursuing sophisticated projects (e.g., real-time streaming buses or complex data systems) while digital marketing managers next door are left downloading Google Ads reports manually. View data engineering as a business, and recognize who your customers are. Often basic automation of ingestion processes has significant value, especially for departments like marketing that control massive budgets and sit at the heart of revenue for the business. Basic ingestion work may seem tedious, but delivering value to these core parts of the company will open up more budget and more exciting long-term data engineering opportunities.
-
-Data engineers can also invite more executive participation in this collaborative process. For a good reason, data-driven culture is quite fashionable in business leadership circles. Still, it is up to data engineers and other data practitioners to provide executives with guidance on the best structure for a data-driven business. This means communicating the value of lowering barriers between data producers and data engineers while supporting executives in breaking down silos and setting up incentives to lead to a more unified data-driven culture.
-
-Once again, communication is the watchword. Honest communication early and often with stakeholders will go a long way to ensure that your data ingestion adds value.
-
-## Undercurrents
-
-Virtually all the undercurrents touch the ingestion phase, but we'll emphasize the most salient ones here.
+**In plain English:** Continuous CDC treats every database write as an event that can be captured and streamed in real-time to downstream systems.
+
+**In technical terms:** Captures all table history and supports near real-time data ingestion for database replication or real-time streaming analytics.
+
+**Common Approach - Log-Based CDC:**
+
+<DiagramContainer title="Log-Based CDC Flow">
+  <ProcessFlow
+    direction="horizontal"
+    steps={[
+      {
+        title: "Database",
+        description: "Every change recorded in binary log",
+        icon: "💾",
+        color: colors.blue
+      },
+      {
+        title: "CDC Tool",
+        description: "Reads log continuously",
+        icon: "📖",
+        color: colors.purple
+      },
+      {
+        title: "Stream (Kafka)",
+        description: "Events sent to streaming platform",
+        icon: "📨",
+        color: colors.green
+      },
+      {
+        title: "Consumers",
+        description: "Multiple targets can consume",
+        icon: "🎯",
+        color: colors.orange
+      }
+    ]}
+  />
+</DiagramContainer>
+
+**Managed CDC Paradigm:**
+
+Some cloud databases can directly trigger serverless functions or write to event streams on every change - completely freeing engineers from worrying about implementation details.
+
+#### CDC and Database Replication
+
+<ComparisonTable
+  beforeTitle="Synchronous Replication"
+  afterTitle="Asynchronous CDC Replication"
+  beforeColor={colors.orange}
+  afterColor={colors.green}
+  items={[
+    {
+      label: "Coupling",
+      before: "Tightly coupled",
+      after: "Loosely coupled"
+    },
+    {
+      label: "Database Types",
+      before: "Same type required (PostgreSQL to PostgreSQL)",
+      after: "Can replicate to different types"
+    },
+    {
+      label: "Sync Level",
+      before: "Fully in sync with primary",
+      after: "Slightly delayed acceptable"
+    },
+    {
+      label: "Use Case",
+      before: "Read replicas, failover",
+      after: "Analytics, multiple targets"
+    },
+    {
+      label: "Targets",
+      before: "Single replica",
+      after: "Object storage, streaming, multiple DBs"
+    }
+  ]}
+/>
+
+#### CDC Considerations
+
+:::caution CDC Resource Consumption
+
+CDC is not free. It consumes:
+- Memory
+- Disk bandwidth
+- Storage
+- CPU time
+- Network bandwidth
+
+**Work with production teams and run tests before turning on CDC on production systems to avoid operational problems.**
+
+For batch CDC, large queries against transactional systems can cause excessive load. Run at off-hours or use read replica.
+
+:::
+
+### 6.3. APIs
+
+**In plain English:** APIs are like restaurant menus - each vendor has their own menu (API specification) with different dishes (data endpoints), different ordering processes, and different pricing. There's no universal standard for how APIs should work.
+
+**In technical terms:** APIs are a data source growing in importance and popularity. A typical organization may have hundreds of external data sources (SaaS platforms, partner companies), but no proper standard exists for data exchange over APIs.
+
+**The Challenge:**
+
+> Data engineers can spend significant time reading documentation, communicating with external data owners, and writing and maintaining API connection code.
+
+**Three Trends Changing This:**
+
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "1. Vendor Client Libraries",
+      icon: "📚",
+      color: colors.blue,
+      items: [
+        "Various programming languages",
+        "Remove API complexity",
+        "Vendor-maintained",
+        "Easier integration"
+      ]
+    },
+    {
+      title: "2. Data Connector Platforms",
+      icon: "🔌",
+      color: colors.purple,
+      items: [
+        "SaaS, open source, managed",
+        "Turnkey connectivity",
+        "Custom connector frameworks",
+        "See section 6.5"
+      ]
+    },
+    {
+      title: "3. Data Sharing",
+      icon: "📊",
+      color: colors.green,
+      items: [
+        "BigQuery, Snowflake, Redshift, S3",
+        "Standard platforms",
+        "Easy to process/move",
+        "Large rapid impact"
+      ]
+    }
+  ]}
+/>
+
+**Best Practices:**
+
+> Don't reinvent the wheel. While managed services might look expensive, consider the value of your time and opportunity cost of building API connectors when you could be spending time on higher-value work.
+
+<ProcessFlow
+  direction="vertical"
+  steps={[
+    {
+      title: "Use Managed Services",
+      description: "Let services handle scheduling and synchronization",
+      icon: "☁️",
+      color: colors.green
+    },
+    {
+      title: "Build Custom Connectors in Framework",
+      description: "Serverless functions (Lambda) for unsupported APIs",
+      icon: "🔧",
+      color: colors.blue
+    },
+    {
+      title: "Follow DevOps Best Practices",
+      description: "Version control, CI/CD, automated testing",
+      icon: "⚙️",
+      color: colors.purple
+    },
+    {
+      title: "Consider Orchestration",
+      description: "Dramatically streamline operational burden",
+      icon: "🎯",
+      color: colors.orange
+    }
+  ]}
+/>
+
+### 6.4. Message Queues and Event-Streaming Platforms
+
+**In plain English:** Message queues and streams are like two different postal systems. Message queues are like regular mail - once you receive and acknowledge a letter, it's removed from the system. Streams are like a recorded video feed - events are preserved in order for as long as you want, and multiple people can watch (consume) them.
+
+**In technical terms:** Message queues and event-streaming platforms are widespread ways to ingest real-time data from web/mobile applications, IoT sensors, and smart devices.
+
+**Key Differences:**
+
+<ComparisonTable
+  beforeTitle="Message Queues"
+  afterTitle="Event Streams"
+  beforeColor={colors.purple}
+  afterColor={colors.blue}
+  items={[
+    {
+      label: "Handling",
+      before: "Individual event level",
+      after: "Ordered log"
+    },
+    {
+      label: "Persistence",
+      before: "Transient - acknowledged and removed",
+      after: "Persists as long as you wish"
+    },
+    {
+      label: "Consumption",
+      before: "Once consumed, it's gone",
+      after: "Multiple consumers can read"
+    },
+    {
+      label: "Capabilities",
+      before: "Simple delivery",
+      after: "Query ranges, aggregate, combine streams"
+    }
+  ]}
+/>
+
+**Batch vs Streaming Workflow:**
+
+<DiagramContainer title="Streaming Data Flow">
+  <Column gap="md">
+    <Row gap="md">
+      <Box color={colors.blue} icon="📤">Producer 1</Box>
+      <Box color={colors.blue} icon="📤">Producer 2</Box>
+    </Row>
+    <Arrow direction="down" label="Publish events" />
+    <Box color={colors.purple} variant="filled" size="lg" icon="📨">
+      Streaming Platform
+    </Box>
+    <Arrow direction="down" label="Consume events" />
+    <Row gap="md">
+      <Box color={colors.green} icon="📥">Consumer 1</Box>
+      <Box color={colors.green} icon="📥">Consumer 2</Box>
+    </Row>
+    <Arrow direction="down" label="Combine and publish" />
+    <Box color={colors.orange} icon="📤">Producer 3 (Combined Dataset)</Box>
+  </Column>
+</DiagramContainer>
+
+**Critical Difference:**
+
+> Whereas batch usually involves static workflows (ingest → store → transform → serve), messages and streams are **fluid**. Ingestion can be nonlinear, with data being published, consumed, republished, and reconsumed.
+
+**Throughput Considerations:**
+
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Performance Requirements",
+      icon: "⚡",
+      color: colors.blue,
+      items: [
+        "Messages flow with minimal latency",
+        "Adequate partition/shard bandwidth",
+        "Sufficient memory, disk, CPU",
+        "Autoscaling for spikes"
+      ]
+    },
+    {
+      title: "Management Overhead",
+      icon: "🔧",
+      color: colors.orange,
+      items: [
+        "Significant if self-managed",
+        "Consider managed services",
+        "Focus on getting value from data",
+        "Outsource complexity"
+      ]
+    }
+  ]}
+/>
+
+### 6.5. Managed Data Connectors
+
+**In plain English:** Managed data connectors are like hiring a moving company instead of renting a truck and moving yourself. They handle all the details of connecting to hundreds of different sources so you don't have to build and maintain each connection.
+
+**In technical terms:** Platforms that provide a standard set of connectors out of the box, sparing data engineers from building complicated plumbing to connect to particular sources.
+
+**Typical Capabilities:**
+
+<DiagramContainer title="Managed Connector Workflow">
+  <ProcessFlow
+    direction="vertical"
+    steps={[
+      {
+        title: "Configure Source & Target",
+        description: "Choose databases, APIs, warehouses",
+        icon: "🎯",
+        color: colors.blue
+      },
+      {
+        title: "Select Ingestion Method",
+        description: "CDC, replication, truncate and reload",
+        icon: "🔄",
+        color: colors.purple
+      },
+      {
+        title: "Set Permissions & Frequency",
+        description: "Configure credentials and update schedule",
+        icon: "⚙️",
+        color: colors.green
+      },
+      {
+        title: "Begin Syncing",
+        description: "Fully managed and monitored by vendor",
+        icon: "✅",
+        color: colors.orange
+      }
+    ]}
+  />
+</DiagramContainer>
+
+**Benefits:**
+
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Hundreds of Connectors",
+      icon: "🔌",
+      color: colors.blue,
+      items: [
+        "Prebuilt options",
+        "Custom connector support",
+        "Vendor maintained",
+        "Regular updates"
+      ]
+    },
+    {
+      title: "Fully Managed",
+      icon: "☁️",
+      color: colors.purple,
+      items: [
+        "Behind-the-scenes management",
+        "Monitoring included",
+        "Alerts on failures",
+        "Logged error information"
+      ]
+    },
+    {
+      title: "Undifferentiated Heavy Lifting",
+      icon: "🏋️",
+      color: colors.green,
+      items: [
+        "Should be outsourced",
+        "Focus on value-add work",
+        "Reduce maintenance burden",
+        "Faster time to value"
+      ]
+    }
+  ]}
+/>
+
+> **Insight**
+>
+> We strongly suggest using managed connector platforms instead of creating and managing your own connectors. The creation and management of data connectors is largely undifferentiated heavy lifting these days and should be outsourced whenever possible.
+
+### 6.6. Moving Data with Object Storage
+
+**In plain English:** Object storage is like a massive, secure warehouse that can hold unlimited amounts of any type of package, with advanced security systems and the ability to give someone a temporary key card to pick up their specific package.
+
+**In technical terms:** Object storage is a multitenant system in public clouds supporting massive amounts of data, making it ideal for moving data in/out of data lakes, between teams, and between organizations.
+
+**Advantages:**
+
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Security & Standards",
+      icon: "🔒",
+      color: colors.blue,
+      items: [
+        "Latest security standards",
+        "Robust track record",
+        "Signed URLs for temp access",
+        "Fine-grained permissions"
+      ]
+    },
+    {
+      title: "Scalability & Reliability",
+      icon: "📈",
+      color: colors.purple,
+      items: [
+        "Massive amounts of data",
+        "Proven reliability",
+        "High availability",
+        "Automatic replication"
+      ]
+    },
+    {
+      title: "Flexibility & Performance",
+      icon: "⚡",
+      color: colors.green,
+      items: [
+        "Arbitrary types and sizes",
+        "High-performance movement",
+        "Global distribution",
+        "Cost-effective storage"
+      ]
+    }
+  ]}
+/>
+
+> **Insight**
+>
+> In our view, object storage is the most optimal and secure way to handle file exchange. See Chapter 6 for extensive discussion of object storage.
+
+### 6.7. Other Ingestion Methods
+
+#### EDI (Electronic Data Interchange)
+
+**In plain English:** EDI usually refers to archaic file exchange methods like email attachments or flash drives - the digital equivalent of sending floppy disks by carrier pigeon.
+
+**Why It Persists:** Archaic IT systems or human process limitations.
+
+**Enhancement Through Automation:**
+
+<ProcessFlow
+  direction="horizontal"
+  steps={[
+    {
+      title: "Cloud Email Server",
+      description: "Receives files automatically",
+      icon: "📧",
+      color: colors.blue
+    },
+    {
+      title: "Object Storage",
+      description: "Saves files immediately",
+      icon: "💾",
+      color: colors.purple
+    },
+    {
+      title: "Orchestration Trigger",
+      description: "Processes data automatically",
+      icon: "⚙️",
+      color: colors.green
+    }
+  ]}
+/>
+
+#### File Export from Databases
+
+**Considerations:**
+
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Load Management",
+      icon: "⚖️",
+      color: colors.orange,
+      items: [
+        "Large scans load database",
+        "Run during off-hours",
+        "Break into smaller exports",
+        "Use read replicas"
+      ]
+    },
+    {
+      title: "Cloud Warehouse Optimization",
+      icon: "☁️",
+      color: colors.blue,
+      items: [
+        "Highly optimized for export",
+        "Snowflake, BigQuery, Redshift",
+        "Direct to object storage",
+        "Various formats supported"
+      ]
+    }
+  ]}
+/>
+
+#### File Format Considerations
+
+<ComparisonTable
+  beforeTitle="CSV (Problematic)"
+  afterTitle="Modern Formats (Recommended)"
+  beforeColor={colors.red}
+  afterColor={colors.green}
+  items={[
+    {
+      label: "Schema",
+      before: "Not natively encoded",
+      after: "Natively encoded (Parquet, Avro, Arrow, ORC)"
+    },
+    {
+      label: "Delimiter Issues",
+      before: "Comma is common in English!",
+      after: "No delimiter issues"
+    },
+    {
+      label: "Nested Data",
+      before: "Not directly supported",
+      after: "Natively supported"
+    },
+    {
+      label: "Configuration",
+      before: "Must specify delimiter, quotes, escaping",
+      after: "Minimal configuration"
+    },
+    {
+      label: "Strings",
+      before: "Requires intervention",
+      after: "Handles arbitrary strings"
+    },
+    {
+      label: "Query Performance",
+      before: "Not optimized",
+      after: "Optimized for engines"
+    }
+  ]}
+/>
+
+:::warning CSV in Production
+
+CSV is ubiquitous and highly error-prone. Engineers must stipulate delimiter, quote characters, and escaping. CSV doesn't encode schema information or support nested structures.
+
+**Autodetection is inappropriate for production ingestion.** Record CSV encoding and schema details in file metadata.
+
+The disadvantage of newer formats: many not natively supported by source systems. Engineers forced to work with CSV and build robust exception handling.
+
+:::
+
+#### Shell
+
+**In plain English:** The shell is like a command center where you can script automated workflows - telling the computer exactly what steps to execute in sequence.
+
+**Common Uses:**
+
+- Read data from database
+- Reserialize to different format
+- Upload to object storage
+- Trigger ingestion process
+
+**Modern Evolution:** Cloud vendors provide robust CLI tools (AWS CLI, gcloud, az). Complex processes possible with simple commands.
+
+> **Insight**
+>
+> As processes grow more complicated and SLAs more stringent, move to proper orchestration system.
+
+#### SSH, SFTP, and SCP
+
+**SSH (Secure Shell):**
+- Not an ingestion strategy but a protocol
+- Used for file transfer (SCP)
+- Used for secure database connections (tunnels)
+
+**Bastion Host Pattern:**
+
+<DiagramContainer title="SSH Tunnel Security">
+  <ProcessFlow
+    direction="horizontal"
+    steps={[
+      {
+        title: "Remote Machine",
+        description: "Opens SSH tunnel",
+        icon: "💻",
+        color: colors.blue
+      },
+      {
+        title: "Bastion Host",
+        description: "Locked down, specified IPs only",
+        icon: "🔒",
+        color: colors.purple
+      },
+      {
+        title: "Database",
+        description: "Never directly exposed to internet",
+        icon: "💾",
+        color: colors.green
+      }
+    ]}
+  />
+</DiagramContainer>
+
+**SFTP (Secure FTP):**
+
+:::caution SFTP Still a Reality
+
+Engineers rightfully cringe at SFTP mention (occasionally FTP in production!). Regardless, SFTP is still a practical reality for many businesses working with partners unwilling to use other standards.
+
+**Security analysis is critical to avoid data leaks.**
+
+:::
+
+**SCP (Secure Copy):**
+- Runs over SSH connection
+- Can be secure if configured correctly
+- Additional network access control recommended (defense in depth)
+
+#### Webhooks
+
+**In plain English:** Webhooks are reverse APIs - instead of you calling a restaurant to order food, the restaurant calls you when your order is ready. The data provider makes the calls instead of receiving them.
+
+**In technical terms:** The data consumer provides an API endpoint for the provider to call. Consumer is responsible for ingesting requests and handling aggregation, storage, and processing.
+
+**Robust Webhook Architecture (AWS Example):**
+
+<DiagramContainer title="Webhook Architecture">
+  <ProcessFlow
+    direction="vertical"
+    steps={[
+      {
+        title: "Lambda Function",
+        description: "Serverless endpoint receives events",
+        icon: "⚡",
+        color: colors.blue
+      },
+      {
+        title: "Kinesis Stream",
+        description: "Buffer and store messages",
+        icon: "📨",
+        color: colors.purple
+      },
+      {
+        title: "Flink Processing",
+        description: "Real-time analytics",
+        icon: "⚙️",
+        color: colors.green
+      },
+      {
+        title: "S3 Storage",
+        description: "Long-term storage",
+        icon: "💾",
+        color: colors.orange
+      }
+    ]}
+  />
+</DiagramContainer>
+
+> **Insight**
+>
+> This architecture does much more than simply ingest data. This underscores ingestion's entanglement with other lifecycle stages - often impossible to define ingestion architecture without making storage and processing decisions.
+
+#### Web Interface
+
+**Reality Check:** Web interfaces for data access remain a practical reality. Not all data/functionality in SaaS platforms is exposed through automated interfaces.
+
+**Problem:** Someone must manually access web interface, generate report, download file to local machine.
+
+**Drawbacks:**
+- People forget to run reports
+- Laptops die
+- Manual processes break
+- Not scalable
+
+> **Recommendation:** Where possible, choose tools and workflows allowing automated data access.
+
+#### Web Scraping
+
+**In plain English:** Web scraping is automatically extracting data from web pages by parsing HTML elements - like a robot copying information from websites into a spreadsheet.
+
+**Reality:** Widespread practice, murky ethical/legal lines.
+
+:::warning Web Scraping Considerations
+
+**Before undertaking any web-scraping project:**
+
+1. **Ask if you should be scraping:** Is data available from third party?
+
+2. **Be a good citizen:**
+   - Don't create DoS attacks
+   - Don't get IP blocked
+   - Pace activities appropriately
+   - Thousands of Lambda functions ≠ good idea
+
+3. **Legal implications:**
+   - DoS attacks have legal consequences
+   - Terms of service violations
+   - Potential headaches for employer/you
+
+4. **Maintenance burden:**
+   - Web pages constantly change HTML
+   - Tricky to keep scrapers updated
+   - Is the effort worth it?
+
+:::
+
+**Architecture Implications:** What will you do with the data? Pull fields with Python? Maintain complete HTML and process with Spark? Decisions lead to very different downstream architectures.
+
+#### Transfer Appliances for Data Migration
+
+**In plain English:** For truly massive data (100+ TB), the fastest way to move it isn't over the internet but by truck - cloud vendors send you a physical box of hard drives you fill up and ship back.
+
+**In technical terms:** Cloud vendors offer transfer appliances - physical storage devices for massive data migrations.
+
+**When to Consider:**
+
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "AWS Snowball",
+      icon: "📦",
+      color: colors.blue,
+      items: [
+        "~100 TB threshold",
+        "Supports import/export",
+        "Faster than internet",
+        "Cheaper than egress fees"
+      ]
+    },
+    {
+      title: "AWS Snowmobile",
+      icon: "🚛",
+      color: colors.orange,
+      items: [
+        "Sent in semitrailer!",
+        "Petabytes or greater",
+        "Entire data center migration",
+        "Extreme use cases"
+      ]
+    }
+  ]}
+/>
+
+**Hybrid/Multicloud Strategy:**
+
+Can export to Snowball, import to second transfer appliance for GCP or Azure. Physical transfer cheaper than data egress fees for significant volumes.
+
+:::caution One-Time Events
+
+Transfer appliances are **one-time ingestion events**, not for ongoing workloads. Constant data movement requires ongoing batch/streaming of smaller data sizes.
+
+:::
+
+#### Data Sharing
+
+**In plain English:** Data sharing is like subscribing to a streaming service - you can watch the content but don't own it. If the provider removes your access, you can't watch anymore.
+
+**In technical terms:** Data providers offer datasets to third-party subscribers (free or paid). Datasets shared read-only - you can integrate with your data but don't physically possess the dataset.
+
+**Characteristics:**
+
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Access Model",
+      icon: "👁️",
+      color: colors.blue,
+      items: [
+        "Read-only fashion",
+        "No physical possession",
+        "Provider can revoke",
+        "Integration without ownership"
+      ]
+    },
+    {
+      title: "Platform Support",
+      icon: "☁️",
+      color: colors.purple,
+      items: [
+        "Cloud platforms offer sharing",
+        "Share your data",
+        "Consume others' data",
+        "BigQuery, Snowflake, Redshift"
+      ]
+    },
+    {
+      title: "Data Marketplaces",
+      icon: "🛒",
+      color: colors.green,
+      items: [
+        "Offer data for sale",
+        "Browse available datasets",
+        "Subscribe to providers",
+        "Growing ecosystem"
+      ]
+    }
+  ]}
+/>
+
+> **Insight**
+>
+> Not ingestion in strict sense (no physical possession), but growing as popular option for consuming data. See Chapters 5 and 6 for more details.
+
+---
+
+## 7. Whom You'll Work With
+
+Data ingestion sits at several organizational boundaries. You'll work with both upstream (data producers) and downstream (data consumers) stakeholders.
+
+### Upstream Stakeholders (Data Producers)
+
+**The Problem:**
+
+> A significant disconnect often exists between those responsible for generating data (software engineers) and data engineers who prepare data for analytics/data science.
+
+**Current State:**
+
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Organizational Silos",
+      icon: "🏢",
+      color: colors.red,
+      items: [
+        "Separate teams",
+        "Different incentives",
+        "Limited communication",
+        "Misaligned priorities"
+      ]
+    },
+    {
+      title: "Perception Issues",
+      icon: "👥",
+      color: colors.orange,
+      items: [
+        "See data engineers as consumers",
+        "Not as stakeholders",
+        "Data exhaust mentality",
+        "Missed collaboration opportunities"
+      ]
+    }
+  ]}
+/>
+
+**The Opportunity:**
+
+<ProcessFlow
+  direction="vertical"
+  steps={[
+    {
+      title: "Improve Communication",
+      description: "Open channels, regular dialogue, shared understanding",
+      icon: "💬",
+      color: colors.blue
+    },
+    {
+      title: "Highlight Contributions",
+      description: "Recognize software engineers to executives and product managers",
+      icon: "⭐",
+      color: colors.purple
+    },
+    {
+      title: "Involve Product Managers",
+      description: "Treat downstream data as part of product",
+      icon: "📋",
+      color: colors.green
+    },
+    {
+      title: "Collaborate on Projects",
+      description: "Event-driven architecture, real-time analytics together",
+      icon: "🤝",
+      color: colors.orange
+    }
+  ]}
+/>
+
+> **Insight**
+>
+> Software engineers are aware of analytics/data science value but don't necessarily have aligned incentives to contribute directly. Inviting them as stakeholders in data engineering outcomes improves data quality and encourages better communication about changes.
+
+### Downstream Stakeholders (Data Consumers)
+
+**Who Are Your Customers?**
+
+<DiagramContainer title="Data Engineering Customer Circles">
+  <Column gap="md">
+    <Box color={colors.blue} variant="filled" size="lg" icon="🎯">
+      Primary Focus
+    </Box>
+    <Row gap="sm">
+      <Box color={colors.blue} variant="outlined">Data Scientists</Box>
+      <Box color={colors.blue} variant="outlined">Analysts</Box>
+      <Box color={colors.blue} variant="outlined">CTOs</Box>
+    </Row>
+    <Box color={colors.purple} variant="filled" size="lg" icon="👥">
+      Broader Circle
+    </Box>
+    <Row gap="sm">
+      <Box color={colors.purple} variant="outlined">Marketing Directors</Box>
+      <Box color={colors.purple} variant="outlined">Supply Chain VPs</Box>
+      <Box color={colors.purple} variant="outlined">CEOs</Box>
+    </Row>
+  </Column>
+</DiagramContainer>
+
+**Common Mistake:**
+
+:::warning Don't Forget Business Stakeholders
+
+Too often, data engineers pursue sophisticated projects (real-time streaming buses, complex systems) while marketing managers next door manually download Google Ads reports.
+
+**View data engineering as a business. Recognize who your customers are.**
+
+:::
+
+**Value of Basic Work:**
+
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Basic Automation Delivers Value",
+      icon: "🤖",
+      color: colors.green,
+      items: [
+        "Marketing controls massive budgets",
+        "Sits at heart of revenue",
+        "Basic work may seem tedious",
+        "But delivers significant value"
+      ]
+    },
+    {
+      title: "Opens Future Opportunities",
+      icon: "🚀",
+      color: colors.blue,
+      items: [
+        "Delivering value opens budget",
+        "Leads to exciting projects",
+        "Builds trust and credibility",
+        "Enables long-term opportunities"
+      ]
+    }
+  ]}
+/>
+
+**Executive Participation:**
+
+<ProcessFlow
+  direction="horizontal"
+  steps={[
+    {
+      title: "Data-Driven Culture",
+      description: "Fashionable in leadership circles",
+      icon: "📊",
+      color: colors.blue
+    },
+    {
+      title: "Provide Guidance",
+      description: "Best structure for data-driven business",
+      icon: "🗺️",
+      color: colors.purple
+    },
+    {
+      title: "Break Down Silos",
+      description: "Lower barriers between producers and engineers",
+      icon: "🔨",
+      color: colors.green
+    },
+    {
+      title: "Set Incentives",
+      description: "Lead unified data-driven culture",
+      icon: "🎯",
+      color: colors.orange
+    }
+  ]}
+/>
+
+> **Watchword: Communication**
+>
+> Honest communication early and often with stakeholders will go a long way to ensure your data ingestion adds value.
+
+---
+
+## 8. Undercurrents
+
+Virtually all undercurrents touch the ingestion phase. We emphasize the most salient ones here.
 
 ### Security
 
-Moving data introduces security vulnerabilities because you have to transfer data between locations. The last thing you want is to capture or compromise the data while moving.
+**In plain English:** Moving data is like transporting valuables - the transfer itself creates vulnerabilities. You need armored trucks, secure routes, and verified delivery rather than just throwing packages in the back of a pickup.
 
-Consider where the data lives and where it is going. Data that needs to move within your VPC should use secure endpoints and never leave the confines of the VPC. Use a VPN or a dedicated private connection if you need to send data between the cloud and an on-premises network. This might cost money, but the security is a good investment. If your data traverses the public internet, ensure that the transmission is encrypted. It is always a good practice to encrypt data over the wire.
+**Critical Considerations:**
+
+<DiagramContainer title="Secure Data Movement">
+  <ProcessFlow
+    direction="vertical"
+    steps={[
+      {
+        title: "Within VPC",
+        description: "Use secure endpoints, never leave VPC confines",
+        icon: "🔒",
+        color: colors.blue
+      },
+      {
+        title: "Cloud to On-Premises",
+        description: "Use VPN or dedicated private connection",
+        icon: "🔐",
+        color: colors.purple
+      },
+      {
+        title: "Public Internet",
+        description: "Always encrypt transmission over the wire",
+        icon: "🛡️",
+        color: colors.green
+      }
+    ]}
+  />
+</DiagramContainer>
+
+> **Best Practice:** It is always a good practice to encrypt data over the wire. The security investment is worth the cost.
 
 ### Data Management
 
-Naturally, data management begins at data ingestion. This is the starting point for lineage and data cataloging; from this point on, data engineers need to think about schema changes, ethics, privacy, and compliance.
+Naturally, data management begins at data ingestion - the starting point for lineage and cataloging.
 
-#### Schema changes
+#### Schema Changes
 
-Schema changes (such as adding, changing, or removing columns in a database table) remain, from our perspective, an unsettled issue in data management. The traditional approach is a careful command-and-control review process. Working with clients at large enterprises, we have been quoted lead times of six months for the addition of a single field. This is an unacceptable impediment to agility.
+**The Problem:**
 
-On the opposite end of the spectrum, any schema change in the source triggers target tables to be re-created with the new schema. This solves schema problems at the ingestion stage but can still break downstream pipelines and destination storage systems.
+> Schema changes remain an unsettled issue in data management from our perspective.
 
-One possible solution, which we, the authors, have meditated on for a while, is an approach pioneered by Git version control. When Linus Torvalds was developing Git, many of his choices were inspired by the limitations of Concurrent Versions System (CVS). CVS is completely centralized; it supports only one current official version of the code, stored on a central project server. To make Git a truly distributed system, Torvalds used the notion of a tree; each developer could maintain their processed branch of the code and then merge to or from other branches.
+<ComparisonTable
+  beforeTitle="Traditional Approach"
+  afterTitle="Agile Automation"
+  beforeColor={colors.red}
+  afterColor={colors.orange}
+  items={[
+    {
+      label: "Process",
+      before: "Command-and-control review",
+      after: "Auto-detect and update"
+    },
+    {
+      label: "Timeline",
+      before: "6 months for single field (!))",
+      after: "Immediate updates"
+    },
+    {
+      label: "Agility",
+      before: "Unacceptable impediment",
+      after: "Better but still breaks downstream"
+    },
+    {
+      label: "Communication",
+      before: "Minimal",
+      after: "Still critical for downstream"
+    }
+  ]}
+/>
 
-A few years ago, such an approach to data was unthinkable. On-premises MPP systems are typically operated at close to maximum storage capacity. However, storage is cheap in big data and cloud data warehouse environments. One may quite easily maintain multiple versions of a table with different schemas and even different upstream transformations. Teams can support various "development" versions of a table by using orchestration tools such as Airflow; schema changes, upstream transformation, and code changes can appear in development tables before official changes to the main table.
+**Git-Inspired Solution:**
 
-#### Data ethics, privacy, and compliance
+Inspired by Git's distributed version control:
 
-Clients often ask for our advice on encrypting sensitive data in databases, which generally leads us to ask a fundamental question: do you need the sensitive data you're trying to encrypt? As it turns out, this question often gets overlooked when creating requirements and solving problems.
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "The Problem (CVS)",
+      icon: "❌",
+      color: colors.red,
+      items: [
+        "Completely centralized",
+        "One official version",
+        "No flexibility",
+        "Torvalds wanted distributed"
+      ]
+    },
+    {
+      title: "The Solution (Git)",
+      icon: "✅",
+      color: colors.green,
+      items: [
+        "Tree structure",
+        "Each dev maintains branch",
+        "Merge to/from branches",
+        "Truly distributed"
+      ]
+    }
+  ]}
+/>
 
-Data engineers should always train themselves to ask this question when setting up ingestion pipelines. They will inevitably encounter sensitive data; the natural tendency is to ingest it and forward it to the next step in the pipeline. But if this data is not needed, why collect it at all? Why not simply drop sensitive fields before data is stored? Data cannot leak if it is never collected.
+**Applied to Data:**
 
-Where it is truly necessary to keep track of sensitive identities, it is common practice to apply tokenization to anonymize identities in model training and analytics. But engineers should look at where this tokenization is used. If possible, hash data at ingestion time.
+> Storage is cheap in big data and cloud environments. Maintain multiple versions of a table with different schemas and transformations. Support "development" versions before official changes to main table.
 
-Data engineers cannot avoid working with highly sensitive data in some cases. Some analytics systems must present identifiable, sensitive information. Engineers must act under the highest ethical standards whenever they handle sensitive data. In addition, they can put in place a variety of practices to reduce the direct handling of sensitive data. Aim as much as possible for touchless production where sensitive data is involved. This means that engineers develop and test code on simulated or cleansed data in development and staging environments but automated code deployments to production.
+#### Data Ethics, Privacy, and Compliance
 
-Touchless production is an ideal that engineers should strive for, but situations inevitably arise that cannot be fully solved in development and staging environments. Some bugs may not be reproducible without looking at the live data that is triggering a regression. For these cases, put a broken-glass process in place: require at least two people to approve access to sensitive data in the production environment. This access should be tightly scoped to a particular issue and come with an expiration date.
+**Fundamental Question:**
 
-Our last bit of advice on sensitive data: be wary of naive technological solutions to human problems. Both encryption and tokenization are often treated like privacy magic bullets. Most cloud-based storage systems and nearly all databases encrypt data at rest and in motion by default. Generally, we don't see encryption problems but data access problems. Is the solution to apply an extra layer of encryption to a single field or to control access to that field? After all, one must still tightly manage access to the encryption key. Legitimate use cases exist for single-field encryption, but watch out for ritualistic encryption.
+> **Do you need the sensitive data you're trying to encrypt?**
 
-On the tokenization front, use common sense and assess data access scenarios. If someone had the email of one of your customers, could they easily hash the email and find the customer in your data? Thoughtlessly hashing data without salting and other strategies may not protect privacy as well as you think.
+**In plain English:** The best way to protect sensitive data is to not collect it in the first place. You can't leak data you never captured.
+
+<ProcessFlow
+  direction="vertical"
+  steps={[
+    {
+      title: "Ask: Do We Need This?",
+      description: "Often overlooked when creating requirements",
+      icon: "❓",
+      color: colors.blue
+    },
+    {
+      title: "Drop Sensitive Fields",
+      description: "Before data is stored if not needed",
+      icon: "🗑️",
+      color: colors.purple
+    },
+    {
+      title: "Tokenize at Ingestion",
+      description: "If truly necessary to track identities",
+      icon: "🔐",
+      color: colors.green
+    },
+    {
+      title: "Touchless Production",
+      description: "Develop on simulated/cleansed data",
+      icon: "🚫",
+      color: colors.orange
+    }
+  ]}
+/>
+
+**Touchless Production:**
+
+Engineers develop and test on simulated/cleansed data in dev/staging, but automated deployments to production.
+
+**Broken-Glass Process:**
+
+When production access inevitable:
+- Require at least two people to approve
+- Tightly scope to particular issue
+- Set expiration date
+- Document access
+
+:::warning Beware Technological Band-Aids
+
+Be wary of naive technological solutions to human problems:
+
+**Encryption:**
+- Most cloud storage/databases encrypt by default
+- Problem is usually **data access**, not encryption
+- Must still tightly manage encryption keys
+- Watch out for ritualistic encryption
+
+**Tokenization:**
+- Use common sense
+- Could someone easily hash an email and find customer?
+- Thoughtless hashing without salting may not protect privacy
+
+:::
 
 ### DataOps
 
-Reliable data pipelines are the cornerstone of the data engineering lifecycle. When they fail, all downstream dependencies come to a screeching halt. Data warehouses and data lakes aren't replenished with fresh data, and data scientists and analysts can't effectively do their jobs; the business is forced to fly blind.
+**In plain English:** Reliable data pipelines are like reliable electricity - you don't notice them until they fail. When ingestion fails, everything downstream stops and the business flies blind.
 
-Ensuring that your data pipelines are properly monitored is a crucial step toward reliability and effective incident response. If there's one stage in the data engineering lifecycle where monitoring is critical, it's in the ingestion stage. Weak or nonexistent monitoring means the pipelines may or may not be working. Referring back to our earlier discussion on time, be sure to track the various aspects of time—event creation, ingestion, process, and processing times. Your data pipelines should predictably process data in batches or streams. We've seen countless examples of reports and ML models generated from stale data. In one extreme case, an ingestion pipeline failure wasn't detected for six months. (One might question the concrete utility of the data in this instance, but that's another matter.) This was very much avoidable through proper monitoring.
+**The Importance of Monitoring:**
 
-What should you monitor? Uptime, latency, and data volumes processed are good places to start. If an ingestion job fails, how will you respond? In general, build monitoring into your pipelines from the beginning rather than waiting for deployment.
+> If there's one stage in the data engineering lifecycle where monitoring is critical, it's in the ingestion stage.
 
-Monitoring is key, as is knowledge of the behavior of the upstream systems you depend on and how they generate data. You should be aware of the number of events generated per time interval you're concerned with (events/minute, events/second, and so on) and the average size of each event. Your data pipeline should handle both the frequency and size of the events you're ingesting.
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "What to Monitor",
+      icon: "📊",
+      color: colors.blue,
+      items: [
+        "Uptime",
+        "Latency",
+        "Data volumes processed",
+        "Event creation/ingestion times"
+      ]
+    },
+    {
+      title: "Time Tracking",
+      icon: "⏰",
+      color: colors.purple,
+      items: [
+        "Event creation time",
+        "Ingestion time",
+        "Process time",
+        "Processing time"
+      ]
+    },
+    {
+      title: "Build In from Start",
+      icon: "🔧",
+      color: colors.green,
+      items: [
+        "Don't wait for deployment",
+        "Monitoring from beginning",
+        "Predictable processing",
+        "Avoid stale data"
+      ]
+    }
+  ]}
+/>
 
-This also applies to third-party services. In the case of these services, what you've gained in terms of lean operational efficiencies (reduced headcount) is replaced by systems you depend on being outside of your control. If you're using a third-party service (cloud, data integration service, etc.), how will you be alerted if there's an outage? What's your response plan if a service you depend on suddenly goes offline?
+:::danger Horror Story: Six-Month Failure
 
-Sadly, no universal response plan exists for third-party failures. If you can fail over to other servers, preferably in another zone or region, definitely set this up.
+In one extreme case, an ingestion pipeline failure wasn't detected for **six months**. (One might question the concrete utility of the data, but that's another matter.) This was very much avoidable through proper monitoring.
 
-If your data ingestion processes are built internally, do you have the proper testing and deployment automation to ensure that the code functions in production? And if the code is buggy or fails, can you roll it back to a working version?
+:::
 
-#### Data-quality tests
+**Upstream System Knowledge:**
 
-We often refer to data as a silent killer. If quality, valid data is the foundation of success in today's businesses, using bad data to make decisions is much worse than having no data. Bad data has caused untold damage to businesses; these data disasters are sometimes called datastrophes.
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Know Your Sources",
+      icon: "📡",
+      color: colors.blue,
+      items: [
+        "Events per time interval",
+        "Average event size",
+        "Peak load patterns",
+        "Expected frequency"
+      ]
+    },
+    {
+      title: "Third-Party Services",
+      icon: "☁️",
+      color: colors.orange,
+      items: [
+        "How will you be alerted?",
+        "What's your response plan?",
+        "Outside of your control",
+        "Lean efficiency = dependency"
+      ]
+    }
+  ]}
+/>
 
-Data is entropic; it often changes in unexpected ways without warning. One of the inherent differences between DevOps and DataOps is that we expect software regressions only when we deploy changes, while data often presents regressions independently because of events outside our control.
+#### Data-Quality Tests
 
-DevOps engineers are typically able to detect problems by using binary conditions. Has the request failure rate breached a certain threshold? How about response latency? In the data space, regressions often manifest as subtle statistical distortions. Is a change in search-term statistics a result of customer behavior? Of a spike in bot traffic that has escaped the net? Of a site test tool deployed in some other part of the company?
+> **"Data is a silent killer."**
 
-Like system failures in DevOps, some data regressions are immediately visible. For example, in the early 2000s, Google provided search terms to websites when users arrived from search. In 2011, Google began withholding this information in some cases to protect user privacy better. Analysts quickly saw "not provided" bubbling to the tops of their reports.
+**The Challenge:**
 
-The truly dangerous data regressions are silent and can come from inside or outside a business. Application developers may change the meaning of database fields without adequately communicating with data teams. Changes to data from third-party sources may go unnoticed. In the best-case scenario, reports break in obvious ways. Often business metrics are distorted unbeknownst to decision makers.
+<ComparisonTable
+  beforeTitle="DevOps (Software)"
+  afterTitle="DataOps (Data)"
+  beforeColor={colors.blue}
+  afterColor={colors.orange}
+  items={[
+    {
+      label: "Regressions",
+      before: "Only when deploying changes",
+      after: "Independently of deployments"
+    },
+    {
+      label: "Detection",
+      before: "Binary conditions (up/down)",
+      after: "Subtle statistical distortions"
+    },
+    {
+      label: "Causes",
+      before: "Code changes",
+      after: "External events, upstream changes"
+    },
+    {
+      label: "Visibility",
+      before: "Usually obvious",
+      after: "Often silent and dangerous"
+    }
+  ]}
+/>
 
-Whenever possible, work with software engineers to fix data-quality issues at the source. It's surprising how many data-quality issues can be handled by respecting basic best practices in software engineering, such as logs to capture the history of data changes, checks (nulls, etc.), and exception handling (try, catch, etc.).
+**Types of Data Regressions:**
 
-Traditional data testing tools are generally built on simple binary logic. Are nulls appearing in a non-nullable field? Are new, unexpected items showing up in a categorical column? Statistical data testing is a new realm, but one that is likely to grow dramatically in the next five years.
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Obvious Regressions",
+      icon: "👁️",
+      color: colors.blue,
+      items: [
+        "Reports break in obvious ways",
+        "\"Not provided\" bubbles to top",
+        "Immediate visibility",
+        "Easier to address"
+      ]
+    },
+    {
+      title: "Silent Regressions (Dangerous)",
+      icon: "🕵️",
+      color: colors.red,
+      items: [
+        "From inside or outside business",
+        "Field meanings change",
+        "Third-party source changes",
+        "Metrics distorted unknowingly"
+      ]
+    }
+  ]}
+/>
+
+**Best Practices:**
+
+<ProcessFlow
+  direction="vertical"
+  steps={[
+    {
+      title: "Fix at Source",
+      description: "Work with software engineers when possible",
+      icon: "🔧",
+      color: colors.blue
+    },
+    {
+      title: "Software Engineering Basics",
+      description: "Logs, null checks, exception handling",
+      icon: "📝",
+      color: colors.purple
+    },
+    {
+      title: "Binary Logic Tests",
+      description: "Nulls in non-nullable? Unexpected categorical items?",
+      icon: "✅",
+      color: colors.green
+    },
+    {
+      title: "Statistical Testing (Emerging)",
+      description: "New realm likely to grow dramatically",
+      icon: "📊",
+      color: colors.orange
+    }
+  ]}
+/>
 
 ### Orchestration
 
-Ingestion generally sits at the beginning of a large and complex data graph; since ingestion is the first stage of the data engineering lifecycle, ingested data will flow into many more data processing steps, and data from many sources will commingle in complex ways. As we've emphasized throughout this book, orchestration is a crucial process for coordinating these steps.
+**In plain English:** Orchestration is like a symphony conductor - it coordinates when each instrument (task) plays, ensures they're in harmony, and manages complex dependencies across the entire performance (pipeline).
 
-Organizations in an early stage of data maturity may choose to deploy ingestion processes as simple scheduled cron jobs. However, it is crucial to recognize that this approach is brittle and can slow the velocity of data engineering deployment and development.
+**Why It Matters:**
 
-As data pipeline complexity grows, true orchestration is necessary. By true orchestration, we mean a system capable of scheduling complete task graphs rather than individual tasks. An orchestration can start each ingestion task at the appropriate scheduled time. Downstream processing and transform steps begin as ingestion tasks are completed. Further downstream, processing steps lead to additional processing steps.
+> Ingestion sits at the beginning of a large and complex data graph. Ingested data will flow into many more processing steps, and data from many sources will commingle in complex ways.
+
+**Evolution Path:**
+
+<DiagramContainer title="Orchestration Maturity">
+  <Row gap="lg">
+    <Column gap="sm" align="center">
+      <Box color={colors.red} variant="filled">Early Stage</Box>
+      <Box color={colors.slate} variant="subtle">Simple cron jobs</Box>
+      <Column gap="xs">
+        <Box color={colors.red} variant="outlined" size="sm">Brittle</Box>
+        <Box color={colors.red} variant="outlined" size="sm">Slows velocity</Box>
+        <Box color={colors.red} variant="outlined" size="sm">Individual tasks only</Box>
+      </Column>
+    </Column>
+    <Arrow direction="right" label="Grow complexity" />
+    <Column gap="sm" align="center">
+      <Box color={colors.green} variant="filled">Mature Stage</Box>
+      <Box color={colors.slate} variant="subtle">True orchestration</Box>
+      <Column gap="xs">
+        <Box color={colors.green} variant="outlined" size="sm">Complete task graphs</Box>
+        <Box color={colors.green} variant="outlined" size="sm">Dependency management</Box>
+        <Box color={colors.green} variant="outlined" size="sm">Automated workflows</Box>
+      </Column>
+    </Column>
+  </Row>
+</DiagramContainer>
+
+**True Orchestration Capabilities:**
+
+- Schedule complete task graphs
+- Start ingestion tasks at appropriate times
+- Begin downstream processing as ingestion completes
+- Chain processing steps automatically
+- Handle complex dependencies
 
 ### Software Engineering
 
-The ingestion stage of the data engineering lifecycle is engineering intensive. This stage sits at the edge of the data engineering domain and often interfaces with external systems, where software and data engineers have to build a variety of custom plumbing.
+**In plain English:** Ingestion is engineering-intensive because it sits at the boundary where your data world meets external systems - you're constantly building custom plumbing to connect the two.
 
-Behind the scenes, ingestion is incredibly complicated, often with teams operating open source frameworks like Kafka or Pulsar, or some of the biggest tech companies running their own forked or homegrown ingestion solutions. As discussed in this chapter, managed data connectors have simplified the ingestion process, such as Fivetran, Matillion, and Airbyte. Data engineers should take advantage of the best available tools—primarily, managed tools and services that do a lot of the heavy lifting for you—and develop high software development competency in areas where it matters. It pays to use proper version control and code review processes and implement appropriate tests even for any ingestion-related code.
+**The Reality:**
 
-When writing software, your code needs to be decoupled. Avoid writing monolithic systems with tight dependencies on the source or destination systems.
+> Behind the scenes, ingestion is incredibly complicated - teams operating Kafka/Pulsar, or tech companies running forked/homegrown solutions.
 
-## Conclusion
+**Best Practices:**
 
-In your work as a data engineer, ingestion will likely consume a significant part of your energy and effort. At the heart, ingestion is plumbing, connecting pipes to other pipes, ensuring that data flows consistently and securely to its destination. At times, the minutiae of ingestion may feel tedious, but the exciting data applications (e.g., analytics and ML) cannot happen without it.
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Use Managed Tools",
+      icon: "☁️",
+      color: colors.blue,
+      items: [
+        "Fivetran, Matillion, Airbyte",
+        "Heavy lifting done for you",
+        "Focus on value-add work",
+        "Reduce maintenance burden"
+      ]
+    },
+    {
+      title: "High Software Competency",
+      icon: "💻",
+      color: colors.purple,
+      items: [
+        "Version control",
+        "Code review processes",
+        "Appropriate tests",
+        "Where it matters"
+      ]
+    },
+    {
+      title: "Decoupled Code",
+      icon: "🔗",
+      color: colors.green,
+      items: [
+        "Avoid monolithic systems",
+        "No tight dependencies",
+        "Flexible architecture",
+        "Easy to change"
+      ]
+    }
+  ]}
+/>
 
-As we've emphasized, we're also in the midst of a sea change, moving from batch toward streaming data pipelines. This is an opportunity for data engineers to discover interesting applications for streaming data, communicate these to the business, and deploy exciting new technologies.
+> **Insight**
+>
+> Take advantage of best available tools - primarily managed services. Develop high software development competency in areas where it matters.
 
-## Additional Resources
+---
 
-- Airbyte's "Connections and Sync Modes" web page
-- Chapter 6, "Batch Is a Special Case of Streaming," in *Introduction to Apache Flink* by Ellen Friedman and Kostas Tzoumas (O'Reilly)
-- "The Dataflow Model: A Practical Approach to Balancing Correctness, Latency, and Cost in Massive-Scale, Unbounded, Out-of-Order Data Processing" by Tyler Akidau et al.
-- Google Cloud's "Streaming Pipelines" web page
+## 9. Summary
+
+You've learned about data ingestion patterns, key engineering considerations, batch and streaming specifics, and the various technologies and practices for moving data from source systems into storage.
+
+### Key Takeaways
+
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "1. Ingestion Is Foundation",
+      icon: "🏗️",
+      color: colors.blue,
+      items: [
+        "Where data engineering truly begins",
+        "Enables all downstream processing",
+        "Plumbing that makes everything work",
+        "Tedious but essential"
+      ]
+    },
+    {
+      title: "2. Many Patterns to Master",
+      icon: "🎯",
+      color: colors.purple,
+      items: [
+        "Batch vs streaming",
+        "Push vs pull vs poll",
+        "Synchronous vs asynchronous",
+        "Choose based on use case"
+      ]
+    },
+    {
+      title: "3. Key Engineering Decisions",
+      icon: "⚙️",
+      color: colors.green,
+      items: [
+        "Bounded vs unbounded data",
+        "Frequency and scalability",
+        "Reliability vs cost trade-offs",
+        "Payload characteristics"
+      ]
+    },
+    {
+      title: "4. Many Ways to Ingest",
+      icon: "🔌",
+      color: colors.orange,
+      items: [
+        "Direct connections (JDBC/ODBC)",
+        "CDC for database changes",
+        "APIs and managed connectors",
+        "Streams, queues, object storage"
+      ]
+    },
+    {
+      title: "5. Streaming Is Growing",
+      icon: "🌊",
+      color: colors.blue,
+      items: [
+        "Sea change from batch to streaming",
+        "Not purely one or the other",
+        "Coexistence is normal",
+        "New opportunities emerging"
+      ]
+    },
+    {
+      title: "6. Use Managed Services",
+      icon: "☁️",
+      color: colors.green,
+      items: [
+        "Don't reinvent the wheel",
+        "Undifferentiated heavy lifting",
+        "Focus on value-add work",
+        "Faster time to value"
+      ]
+    },
+    {
+      title: "7. Stakeholder Communication",
+      icon: "💬",
+      color: colors.purple,
+      items: [
+        "Work with upstream producers",
+        "Serve downstream consumers",
+        "Break down silos",
+        "Honest, frequent communication"
+      ]
+    },
+    {
+      title: "8. Monitoring Is Critical",
+      icon: "📊",
+      color: colors.red,
+      items: [
+        "Build in from start",
+        "Track uptime, latency, volumes",
+        "Data-quality tests",
+        "Prevent silent failures"
+      ]
+    }
+  ]}
+/>
+
+### Critical Principles
+
+**All Data Is Unbounded Until It's Bounded**
+- Recognize the true continuous nature of data
+- Streaming preserves unbounded nature
+- Batch imposes artificial boundaries
+- Choose approach based on use case
+
+**Ingestion Should Never Be a Bottleneck**
+- In theory, never a bottleneck
+- In practice, often is
+- Design for scalability and elasticity
+- Use managed services when possible
+
+**Security Starts at Ingestion**
+- Moving data creates vulnerabilities
+- Encrypt over the wire
+- Use VPNs, secure endpoints
+- Don't collect data you don't need
+
+**Schema Is Your Friend and Enemy**
+- Understanding schema is the challenge
+- Changes happen frequently
+- Communication critical
+- Automation helps but isn't magic
+
+**Communication Is the Watchword**
+- Upstream stakeholders (producers)
+- Downstream stakeholders (consumers)
+- Early and often
+- Ensures ingestion adds value
+
+> **Insight**
+>
+> We're in the midst of a sea change, moving from batch toward streaming data pipelines. This is an opportunity for data engineers to discover interesting applications for streaming data, communicate these to the business, and deploy exciting new technologies.
+
+**Additional Resources:**
+- Airbyte's "Connections and Sync Modes" documentation
+- *Introduction to Apache Flink* by Ellen Friedman and Kostas Tzoumas (Chapter 6: "Batch Is a Special Case of Streaming")
+- "The Dataflow Model" paper by Tyler Akidau et al.
+- Google Cloud's "Streaming Pipelines" documentation
 - Microsoft's "Snapshot Window (Azure Stream Analytics)" documentation
 
 ---
