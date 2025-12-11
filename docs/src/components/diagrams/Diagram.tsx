@@ -310,11 +310,29 @@ interface Card {
 }
 
 interface CardGridProps {
-  cards: Card[];
+  cards?: Card[];
   columns?: 2 | 3 | 4;
+  children?: React.ReactNode;
 }
 
-export function CardGrid({ cards, columns = 3 }: CardGridProps) {
+export function CardGrid({ cards, columns = 3, children }: CardGridProps) {
+  // If children are provided, render them in a grid
+  if (children) {
+    return (
+      <div
+        className={styles.cardGrid}
+        style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}
+      >
+        {children}
+      </div>
+    );
+  }
+
+  // If no cards, return null
+  if (!cards || cards.length === 0) {
+    return null;
+  }
+
   return (
     <div
       className={styles.cardGrid}

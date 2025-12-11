@@ -1,16 +1,40 @@
 ---
 sidebar_position: 7
-title: Chapter 6 - Storage
-description: Understanding storage systems, from raw ingredients like SSDs and memory to abstractions like data warehouses and data lakes in the data engineering lifecycle.
+title: "Chapter 6: Storage"
+description: "Understanding data storage systems, from raw ingredients like SSDs and memory to abstractions like data warehouses and data lakes in the data engineering lifecycle"
 ---
 
-# Chapter 6. Storage
+import { ProcessFlow, CardGrid, ComparisonTable, DiagramContainer, TreeDiagram, StackDiagram, Row, Column, Box, Arrow, Group, colors } from '@site/src/components/diagrams';
+
+# Chapter 6: Storage
 
 Storage is the cornerstone of the data engineering lifecycle and underlies its major stages—ingestion, transformation, and serving. Data gets stored many times as it moves through the lifecycle. To paraphrase an old saying, it's storage all the way down. Whether data is needed seconds, minutes, days, months, or years later, it must persist in storage until systems are ready to consume it for further processing and transmission. Knowing the use case of the data and the way you will retrieve it in the future is the first step to choosing the proper storage solutions for your data architecture.
+
+<DiagramContainer title="Storage in the Data Engineering Lifecycle">
+  <ProcessFlow
+    steps={[
+      { label: 'Source Systems', description: 'Data generation' },
+      { label: 'Ingestion', description: 'Storage plays a role' },
+      { label: 'Storage', description: 'Central hub', highlighted: true },
+      { label: 'Transformation', description: 'Storage plays a role' },
+      { label: 'Serving', description: 'Data delivery' }
+    ]}
+  />
+</DiagramContainer>
 
 We also discussed storage in Chapter 5, but with a difference in focus and domain of control. Source systems are generally not maintained or controlled by data engineers. The storage that data engineers handle directly, which we'll focus on in this chapter, encompasses the data engineering lifecycle stages of ingesting data from source systems to serving data to deliver value with analytics, data science, etc. Many forms of storage undercut the entire data engineering lifecycle in some fashion.
 
 To understand storage, we're going to start by studying the raw ingredients that compose storage systems, including hard drives, solid state drives, and system memory. It's essential to understand the basic characteristics of physical storage technologies to assess the trade-offs inherent in any storage architecture. This section also discusses serialization and compression, key software elements of practical storage. We also discuss caching, which is critical in assembling storage systems.
+
+<DiagramContainer title="Storage Layers">
+  <StackDiagram
+    layers={[
+      { label: 'Storage Abstractions', description: 'Data warehouses, lakes, lakehouses', color: colors.purple },
+      { label: 'Storage Systems', description: 'Object storage, databases, filesystems', color: colors.blue },
+      { label: 'Raw Ingredients', description: 'HDDs, SSDs, RAM, networking, serialization', color: colors.green }
+    ]}
+  />
+</DiagramContainer>
 
 Next, we'll look at storage systems. In practice, we don't directly access system memory or hard disks. These physical storage components exist inside servers and clusters that can ingest and retrieve data using various access paradigms.
 
@@ -47,15 +71,11 @@ Finally, we'll look at storage abstractions. Storage systems are assembled into 
    - Data Sharing
    - Schema
    - Separation of Compute from Storage
-   - Zero-copy cloning
-5. [Data Storage Lifecycle and Data Retention](#data-storage-lifecycle-and-data-retention)
-   - Hot, warm, and cold data
-   - Data retention
-6. [Single-Tenant Versus Multitenant Storage](#single-tenant-versus-multitenant-storage)
-7. [Whom You'll Work With](#whom-youll-work-with)
-8. [Undercurrents](#undercurrents)
-9. [Conclusion](#conclusion)
-10. [Additional Resources](#additional-resources)
+   - Zero-copy Cloning
+   - Data Storage Lifecycle and Data Retention
+   - Single-Tenant Versus Multitenant Storage
+5. [Whom You'll Work With](#whom-youll-work-with)
+6. [Undercurrents](#undercurrents)
 
 ## Raw Ingredients of Data Storage
 
@@ -68,6 +88,53 @@ Let's look at some of the raw ingredients of data storage: disk drives, memory, 
 ### Magnetic Disk Drive
 
 Magnetic disks utilize spinning platters coated with a ferromagnetic film. This film is magnetized by a read/write head during write operations to physically encode binary data. The read/write head detects the magnetic field and outputs a bitstream during read operations. Magnetic disk drives have been around for ages. They still form the backbone of bulk data storage systems because they are significantly cheaper than SSDs per gigabyte of stored data.
+
+<DiagramContainer title="Magnetic Disk Drive Characteristics">
+  <CardGrid
+    cards={[
+      {
+        title: 'Cost',
+        description: '~$0.03 per GB',
+        metric: 'Lowest cost',
+        color: colors.green
+      },
+      {
+        title: 'Transfer Speed',
+        description: '200-300 MB/s',
+        metric: 'Sequential reads',
+        color: colors.yellow
+      },
+      {
+        title: 'Seek Time',
+        description: '~4 milliseconds',
+        metric: 'Random access',
+        color: colors.orange
+      },
+      {
+        title: 'IOPS',
+        description: '50-500 IOPS',
+        metric: 'Operations/second',
+        color: colors.red
+      }
+    ]}
+  />
+</DiagramContainer>
+
+:::info In Plain English
+A magnetic disk is like a record player for data. A spinning platter stores information magnetically, and a read/write head moves back and forth to access different parts of the disk. This physical movement makes it slower than newer technologies, but it's much cheaper per gigabyte.
+:::
+
+:::note In Technical Terms
+HDDs face fundamental performance limitations due to physics:
+- **Disk transfer speed** scales with linear density, not areal density, creating a growing gap between capacity and transfer rate
+- **Seek time** requires physical head movement across tracks
+- **Rotational latency** depends on waiting for data to rotate under the head
+- These constraints result in ~4ms latency and limited IOPS, making HDDs unsuitable for high-concurrency workloads
+:::
+
+:::tip Why It Matters
+Understanding HDD limitations helps you make the right storage choices. HDDs excel in bulk storage and sequential reads (like data lakes with parallel access), but fail for random access patterns (like transactional databases). Cloud object storage leverages thousands of HDDs in parallel to overcome individual disk limitations.
+:::
 
 On the one hand, these disks have seen extraordinary improvements in performance, storage density, and cost. On the other hand, SSDs dramatically outperform magnetic disks on various metrics. Currently, commercial magnetic disk drives cost roughly 3 cents per gigabyte of capacity.
 
@@ -85,6 +152,17 @@ As mentioned earlier, magnetic disks are still prized in data centers for their 
 
 Solid-state drives (SSDs) store data as charges in flash memory cells. SSDs eliminate the mechanical components of magnetic drives; the data is read by purely electronic means. SSDs can look up random data in less than 0.1 ms (100 microseconds). In addition, SSDs can scale both data-transfer speeds and IOPS by slicing storage into partitions with numerous storage controllers running in parallel. Commercial SSDs can support transfer speeds of many gigabytes per second and tens of thousands of IOPS.
 
+<ComparisonTable
+  title="HDD vs SSD Performance"
+  columns={['Metric', 'HDD', 'SSD', 'Improvement']}
+  rows={[
+    ['Random Access Latency', '~4 milliseconds', '~0.1 milliseconds', '40x faster'],
+    ['Transfer Speed', '200-300 MB/s', 'Multiple GB/s', '10x+ faster'],
+    ['IOPS', '50-500', 'Tens of thousands', '100x+ faster'],
+    ['Cost per GB', '$0.03', '$0.20-0.30', '10x more expensive']
+  ]}
+/>
+
 Because of these exceptional performance characteristics, SSDs have revolutionized transactional databases and are the accepted standard for commercial deployments of OLTP systems. SSDs allow relational databases such as PostgreSQL, MySQL, and SQL Server to handle thousands of transactions per second.
 
 However, SSDs are not currently the default option for high-scale analytics data storage. Again, this comes down to cost. Commercial SSDs typically cost 20–30 cents (USD) per gigabyte of capacity, nearly 10 times the cost per capacity of a magnetic drive. Thus, object storage on magnetic disks has emerged as the leading option for large-scale data storage in data lakes and cloud data warehouses.
@@ -95,13 +173,40 @@ SSDs still play a significant role in OLAP systems. Some OLAP databases leverage
 
 We commonly use the terms random access memory (RAM) and memory interchangeably. Strictly speaking, magnetic drives and SSDs also serve as memory that stores data for later random access retrieval, but RAM has several specific characteristics:
 
-- It is attached to a CPU and mapped into CPU address space.
-- It stores the code that CPUs execute and the data that this code directly processes.
-- It is volatile, while magnetic drives and SSDs are nonvolatile. Though they may occasionally fail and corrupt or lose data, drives generally retain data when powered off. RAM loses data in less than a second when it is unpowered.
-- It offers significantly higher transfer speeds and faster retrieval times than SSD storage. DDR5 memory—the latest widely used standard for RAM—offers data retrieval latency on the order of 100 ns, roughly 1,000 times faster than SSD. A typical CPU can support 100 GB/s bandwidth to attached memory and millions of IOPS.
-- It is significantly more expensive than SSD storage, at roughly $10/GB (at the time of this writing).
-- It is limited in the amount of RAM attached to an individual CPU and memory controller. This adds further to complexity and cost. High-memory servers typically utilize many interconnected CPUs on one board, each with a block of attached RAM.
-- It is still significantly slower than CPU cache, a type of memory located directly on the CPU die or in the same package. Cache stores frequently and recently accessed data for ultrafast retrieval during processing. CPU designs incorporate several layers of cache of varying size and performance characteristics.
+<CardGrid
+  cards={[
+    {
+      title: 'CPU Integration',
+      description: 'Attached to CPU and mapped into CPU address space',
+      icon: '🔗'
+    },
+    {
+      title: 'Code Execution',
+      description: 'Stores code that CPUs execute and data being processed',
+      icon: '⚡'
+    },
+    {
+      title: 'Volatility',
+      description: 'Data is lost when unpowered, unlike persistent drives',
+      icon: '⚠️'
+    },
+    {
+      title: 'Ultra-Fast',
+      description: '~100ns latency, 1000x faster than SSD',
+      icon: '🚀'
+    },
+    {
+      title: 'Expensive',
+      description: '~$10/GB, 50x more expensive than SSD',
+      icon: '💰'
+    },
+    {
+      title: 'Limited Capacity',
+      description: 'Constrained by CPU and memory controller architecture',
+      icon: '📏'
+    }
+  ]}
+/>
 
 When we talk about system memory, we almost always mean dynamic RAM, a high-density, low-cost form of memory. Dynamic RAM stores data as charges in capacitors. These capacitors leak over time, so the data must be frequently refreshed (read and rewritten) to prevent data loss. The hardware memory controller handles these technical details; data engineers simply need to worry about bandwidth and retrieval latency characteristics.
 
@@ -111,7 +216,9 @@ RAM is used in various storage and processing systems and can be used for cachin
 
 Why are we mentioning networking and CPU as raw ingredients for storing data? Increasingly, storage systems are distributed to enhance performance, durability, and availability. We mentioned specifically that individual magnetic disks offer relatively low-transfer performance, but a cluster of disks parallelizes reads for significant performance scaling. While storage standards such as redundant arrays of independent disks (RAID) parallelize on a single server, cloud object storage clusters operate at a much larger scale, with disks distributed across a network and even multiple data centers and availability zones.
 
+:::info Availability Zones
 Availability zones are a standard cloud construct consisting of compute environments with independent power, water, and other resources. Multizonal storage enhances both the availability and durability of data.
+:::
 
 CPUs handle the details of servicing requests, aggregating reads, and distributing writes. Storage becomes a web application with an API, backend service components, and load balancing. Network device performance and network topology are key factors in realizing high performance.
 
@@ -121,13 +228,56 @@ Data engineers need to understand how networking will affect the systems they bu
 
 Serialization is another raw storage ingredient and a critical element of database design. The decisions around serialization will inform how well queries perform across a network, CPU overhead, query latency, and more. Designing a data lake, for example, involves choosing a base storage system (e.g., Amazon S3) and standards for serialization that balance interoperability with performance considerations.
 
-What is serialization, exactly? Data stored in system memory by software is generally not in a format suitable for storage on disk or transmission over a network. Serialization is the process of flattening and packing data into a standard format that a reader will be able to decode. Serialization formats provide a standard of data exchange. We might encode data in a row-based manner as an XML, JSON, or CSV file and pass it to another user who can then decode it using a standard library. A serialization algorithm has logic for handling types, imposes rules on data structure, and allows exchange between programming languages and CPUs.
+:::info In Plain English
+Think of serialization like packing a suitcase. You need to take all your belongings (data) and organize them in a specific way so they fit in the suitcase (storage format) and can be unpacked correctly at your destination. Different packing methods work better for different situations.
+:::
+
+:::note In Technical Terms
+Data stored in system memory by software is generally not in a format suitable for storage on disk or transmission over a network. Serialization is the process of flattening and packing data into a standard format that a reader will be able to decode. Serialization formats provide a standard of data exchange. We might encode data in a row-based manner as an XML, JSON, or CSV file and pass it to another user who can then decode it using a standard library.
+:::
+
+:::tip Why It Matters
+Serialization choices have profound impacts on query performance, storage costs, and system interoperability. Row-oriented formats (CSV, JSON) are great for transactional workloads, while columnar formats (Parquet, ORC) dramatically reduce data scanned and improve compression for analytics workloads.
+:::
+
+A serialization algorithm has logic for handling types, imposes rules on data structure, and allows exchange between programming languages and CPUs. The serialization algorithm also has rules for handling exceptions. For instance, Python objects can contain cyclic references; the serialization algorithm might throw an error or limit nesting depth on encountering a cycle.
 
 Low-level database storage is also a form of serialization. Row-oriented relational databases organize data as rows on disk to support speedy lookups and in-place updates. Columnar databases organize data into column files to optimize for highly efficient compression and support fast scans of large data volumes. Each serialization choice comes with a set of trade-offs, and data engineers tune these choices to optimize performance to requirements.
 
 ### Compression
 
 Compression is another critical component of storage engineering. On a basic level, compression makes data smaller, but compression algorithms interact with other details of storage systems in complex ways.
+
+<DiagramContainer title="Benefits of Compression">
+  <CardGrid
+    cards={[
+      {
+        title: 'Reduced Storage',
+        description: 'Data takes up less space on disk',
+        metric: '10:1 typical ratio',
+        color: colors.green
+      },
+      {
+        title: 'Increased Scan Speed',
+        description: 'Effective scan rate multiplied by compression ratio',
+        metric: '200 MB/s → 2 GB/s at 10:1',
+        color: colors.blue
+      },
+      {
+        title: 'Network Performance',
+        description: 'Effective bandwidth multiplied by compression ratio',
+        metric: '10 Gbps → 100 Gbps at 10:1',
+        color: colors.purple
+      },
+      {
+        title: 'CPU Overhead',
+        description: 'Extra time to compress/decompress',
+        metric: 'Trade-off consideration',
+        color: colors.orange
+      }
+    ]}
+  />
+</DiagramContainer>
 
 Highly efficient compression has three main advantages in storage systems. First, the data is smaller and thus takes up less space on the disk. Second, compression increases the practical scan speed per disk. With a 10:1 compression ratio, we go from scanning 200 MB/s per magnetic disk to an effective rate of 2 GB/s per disk.
 
@@ -139,7 +289,24 @@ Compression also comes with disadvantages. Compressing and decompressing data en
 
 We've already mentioned caching in our discussion of RAM. The core idea of caching is to store frequently or recently accessed data in a fast access layer. The faster the cache, the higher the cost and the less storage space available. Less frequently accessed data is stored in cheaper, slower storage. Caches are critical for data serving, processing, and transformation.
 
+<DiagramContainer title="Storage Hierarchy (Cache to Archive)">
+  <StackDiagram
+    layers={[
+      { label: 'CPU Cache', description: '1 ns latency • 1 TB/s bandwidth • N/A pricing', color: colors.purple },
+      { label: 'RAM', description: '0.1 μs latency • 100 GB/s bandwidth • $10/GB', color: colors.blue },
+      { label: 'SSD', description: '0.1 ms latency • 4 GB/s bandwidth • $0.20/GB', color: colors.green },
+      { label: 'HDD', description: '4 ms latency • 300 MB/s bandwidth • $0.03/GB', color: colors.yellow },
+      { label: 'Object Storage', description: '100 ms latency • 10 GB/s bandwidth • $0.02/GB/month', color: colors.orange },
+      { label: 'Archival', description: '12 hours latency • Same bandwidth • $0.004/GB/month', color: colors.red }
+    ]}
+  />
+</DiagramContainer>
+
 As we analyze storage systems, it is helpful to put every type of storage we utilize inside a cache hierarchy. Most practical data systems rely on many cache layers assembled from storage with varying performance characteristics. This starts inside CPUs; processors may deploy up to four cache tiers. We move down the hierarchy to RAM and SSDs. Cloud object storage is a lower tier that supports long-term data retention and durability while allowing for data serving and dynamic data movement in pipelines.
+
+:::note Note
+A microsecond is 1,000 nanoseconds, and a millisecond is 1,000 microseconds.
+:::
 
 We can think of archival storage as a reverse cache. Archival storage provides inferior access characteristics for low costs. Archival storage is generally used for data backups and to meet data-retention compliance requirements. In typical scenarios, this data will be accessed only in an emergency (e.g., data in a database might be lost and need to be recovered, or a company might need to look back at historical data for legal discovery).
 
@@ -151,6 +318,26 @@ This section covers the major data storage systems you'll encounter as a data en
 
 As data storage and access patterns become more complex and outgrow the usefulness of a single server, distributing data to more than one server becomes necessary. Data can be stored on multiple servers, known as distributed storage. This is a distributed system whose purpose is to store data in a distributed fashion.
 
+<DiagramContainer title="Single Machine vs Distributed Storage">
+  <Row spacing="large">
+    <Column>
+      <Box color={colors.blue} label="Single Machine Storage" />
+      <Box color={colors.gray} label="Limited by one server" size="small" />
+      <Box color={colors.gray} label="Single point of failure" size="small" />
+    </Column>
+    <Column>
+      <Box color={colors.green} label="Distributed Storage" />
+      <Group label="Multiple Servers">
+        <Box color={colors.purple} label="Server 1" size="small" />
+        <Box color={colors.purple} label="Server 2" size="small" />
+        <Box color={colors.purple} label="Server 3" size="small" />
+      </Group>
+      <Box color={colors.gray} label="Built-in redundancy" size="small" />
+      <Box color={colors.gray} label="Horizontal scalability" size="small" />
+    </Column>
+  </Row>
+</DiagramContainer>
+
 Distributed storage coordinates the activities of multiple servers to store, retrieve, and process data faster and at a larger scale, all while providing redundancy in case a server becomes unavailable. Distributed storage is common in architectures where you want built-in redundancy and scalability for large amounts of data. For example, object storage, Apache Spark, and cloud data warehouses rely on distributed storage architectures.
 
 Data engineers must always be aware of the consistency paradigms of the distributed systems, which we'll explore next.
@@ -161,18 +348,41 @@ A challenge with distributed systems is that your data is spread across multiple
 
 We've covered ACID compliance throughout this book, starting in Chapter 5. Another acronym is BASE, which stands for basically available, soft-state, eventual consistency. Think of it as the opposite of ACID. BASE is the basis of eventual consistency. Let's briefly explore its components:
 
-**Basically available**
-Consistency is not guaranteed, but database reads and writes are made on a best-effort basis, meaning consistent data is available most of the time.
-
-**Soft-state**
-The state of the transaction is fuzzy, and it's uncertain whether the transaction is committed or uncommitted.
-
-**Eventual consistency**
-At some point, reading data will return consistent values.
+<CardGrid
+  cards={[
+    {
+      title: 'Basically Available',
+      description: 'Consistency is not guaranteed, but database reads and writes are made on a best-effort basis, meaning consistent data is available most of the time',
+      icon: '✓'
+    },
+    {
+      title: 'Soft-State',
+      description: "The state of the transaction is fuzzy, and it's uncertain whether the transaction is committed or uncommitted",
+      icon: '~'
+    },
+    {
+      title: 'Eventual Consistency',
+      description: 'At some point, reading data will return consistent values',
+      icon: '⏱️'
+    }
+  ]}
+/>
 
 If reading data in an eventually consistent system is unreliable, why use it? Eventual consistency is a common trade-off in large-scale, distributed systems. If you want to scale horizontally (across multiple nodes) to process data in high volumes, then eventually, consistency is often the price you'll pay. Eventual consistency allows you to retrieve data quickly without verifying that you have the latest version across all nodes.
 
 The opposite of eventual consistency is strong consistency. With strong consistency, the distributed database ensures that writes to any node are first distributed with a consensus and that any reads against the database return consistent values. You'll use strong consistency when you can tolerate higher query latency and require correct data every time you read from the database.
+
+<ComparisonTable
+  title="Eventual vs Strong Consistency"
+  columns={['Characteristic', 'Eventual Consistency', 'Strong Consistency']}
+  rows={[
+    ['Read Accuracy', 'May return stale data temporarily', 'Always returns latest data'],
+    ['Write Performance', 'Fast writes, no consensus needed', 'Slower writes, consensus required'],
+    ['Read Performance', 'Fast reads, no validation', 'Slower reads, validation required'],
+    ['Use Case', 'High-volume, distributed systems', 'Critical data requiring accuracy'],
+    ['Example', 'Social media feeds, analytics', 'Financial transactions, inventory']
+  ]}
+/>
 
 Generally, data engineers make decisions about consistency in three places. First, the database technology itself sets the stage for a certain level of consistency. Second, configuration parameters for the database will have an impact on consistency. Third, databases often support some consistency configuration at an individual query level. For example, DynamoDB supports eventually consistent reads and strongly consistent reads. Strongly consistent reads are slower and consume more resources, so it is best to use them sparingly, but they are available when consistency is required.
 
@@ -182,14 +392,25 @@ You should understand how your database handles consistency. Again, data enginee
 
 We deal with files every day, but the notion of a file is somewhat subtle. A file is a data entity with specific read, write, and reference characteristics used by software and operating systems. We define a file to have the following characteristics:
 
-**Finite length**
-A file is a finite-length stream of bytes.
-
-**Append operations**
-We can append bytes to the file up to the limits of the host storage system.
-
-**Random access**
-We can read from any location in the file or write updates to any location.
+<CardGrid
+  cards={[
+    {
+      title: 'Finite Length',
+      description: 'A file is a finite-length stream of bytes',
+      icon: '📏'
+    },
+    {
+      title: 'Append Operations',
+      description: 'We can append bytes to the file up to the limits of the host storage system',
+      icon: '➕'
+    },
+    {
+      title: 'Random Access',
+      description: 'We can read from any location in the file or write updates to any location',
+      icon: '🎯'
+    }
+  ]}
+/>
 
 Object storage behaves much like file storage but with key differences. While we set the stage for object storage by discussing file storage first, object storage is arguably much more important for the type of data engineering you'll do today.
 
@@ -245,6 +466,19 @@ Storage area network (SAN) systems provide virtualized block storage devices ove
 
 Cloud virtualized block storage solutions are similar to SAN but free engineers from dealing with SAN clusters and networking details. We'll look at Amazon Elastic Block Store (EBS) as a standard example; other public clouds have similar offerings. EBS is the default storage for Amazon EC2 virtual machines; other cloud providers also treat virtualized object storage as a key component of their VM offerings.
 
+<DiagramContainer title="EBS Architecture">
+  <Group label="Availability Zone">
+    <Box color={colors.blue} label="EC2 Instance" />
+    <Arrow direction="down" />
+    <Box color={colors.green} label="EBS Volume" />
+    <Arrow direction="down" />
+    <Group label="Data Replication">
+      <Box color={colors.purple} label="Host 1" size="small" />
+      <Box color={colors.purple} label="Host 2" size="small" />
+    </Group>
+  </Group>
+</DiagramContainer>
+
 EBS offers several tiers of service with different performance characteristics. Generally, EBS performance metrics are given in IOPS and throughput (transfer speed). The higher performance tiers of EBS storage are backed by SSD disks, while magnetic disk-backed storage offers lower IOPS but costs less per gigabyte.
 
 EBS volumes store data separate from the instance host server but in the same zone to support high performance and low latency. This allows EBS volumes to persist when an EC2 instance shuts down, when a host server fails, or even when the instance is deleted. EBS storage is suitable for applications such as databases, where data durability is a high priority. In addition, EBS replicates all data to at least two separate host machines, protecting data if a disk fails.
@@ -259,7 +493,18 @@ Cloud providers also offer block storage volumes that are physically attached to
 
 Instance store volumes behave essentially like a disk physically attached to a server in a data center. One key difference is that when a VM shuts down or is deleted, the contents of the locally attached disk are lost, whether or not this event was caused by intentional user action. This ensures that a new virtual machine cannot read disk contents belonging to a different customer.
 
-Locally attached disks support none of the advanced virtualization features offered by virtualized storage services like EBS. The locally attached disk is not replicated, so a physical disk failure can lose or corrupt data even if the host VM continues running. Furthermore, locally attached volumes do not support snapshots or other backup features.
+<ComparisonTable
+  title="EBS vs Instance Store Volumes"
+  columns={['Feature', 'EBS Volumes', 'Instance Store Volumes']}
+  rows={[
+    ['Persistence', 'Survives instance stop/restart', 'Lost on instance stop/delete'],
+    ['Replication', 'Replicated across multiple hosts', 'No replication'],
+    ['Snapshots', 'Supports snapshots to S3', 'No snapshot support'],
+    ['Performance', 'Network-attached, some latency', 'Locally attached, low latency'],
+    ['Cost', 'Pay per GB provisioned', 'Included with instance'],
+    ['Use Case', 'Databases, persistent storage', 'Caching, temporary processing']
+  ]}
+/>
 
 Despite these limitations, locally attached disks are extremely useful. In many cases, we use disks as a local cache and hence don't need all the advanced virtualization features of a service like EBS. For example, suppose we're running AWS EMR on EC2 instances. We may be running an ephemeral job that consumes data from S3, stores it temporarily in the distributed filesystem running across the instances, processes the data, and writes the results back to S3. The EMR filesystem builds in replication and redundancy and is serving as a cache rather than permanent storage. The EC2 instance store is a perfectly suitable solution in this case and can enhance performance since data can be read and processed locally without flowing over a network.
 
@@ -269,11 +514,58 @@ We recommend that engineers think about locally attached storage in worst-case s
 
 Object storage contains objects of all shapes and sizes. The term object storage is somewhat confusing because object has several meanings in computer science. In this context, we're talking about a specialized file-like construct. It could be any type of file—TXT, CSV, JSON, images, videos, or audio.
 
+<DiagramContainer title="Object Storage Characteristics">
+  <CardGrid
+    cards={[
+      {
+        title: 'Immutable Objects',
+        description: 'Objects cannot be modified in place, only replaced',
+        icon: '🔒'
+      },
+      {
+        title: 'Key-Value Store',
+        description: 'Objects referenced by unique keys, not directory trees',
+        icon: '🔑'
+      },
+      {
+        title: 'High Scalability',
+        description: 'Virtually unlimited storage across distributed clusters',
+        icon: '📈'
+      },
+      {
+        title: 'Multi-Zone',
+        description: 'Data replicated across availability zones',
+        icon: '🌐'
+      },
+      {
+        title: 'Parallel Access',
+        description: 'Scales read/write with parallel streams',
+        icon: '⚡'
+      },
+      {
+        title: 'Cost Effective',
+        description: '~$0.02/GB/month for standard tiers',
+        icon: '💰'
+      }
+    ]}
+  />
+</DiagramContainer>
+
 Object stores have grown in importance and popularity with the rise of big data and the cloud. Amazon S3, Azure Blob Storage, and Google Cloud Storage (GCS) are widely used object stores. In addition, many cloud data warehouses (and a growing number of databases) utilize object storage as their storage layer, and cloud data lakes generally sit on object stores.
 
 Although many on-premises object storage systems can be installed on server clusters, we'll focus mostly on fully managed cloud object stores. From an operational perspective, one of the most attractive characteristics of cloud object storage is that it is straightforward to manage and use. Object storage was arguably one of the first "serverless" services; engineers don't need to consider the characteristics of underlying server clusters or disks.
 
+:::info In Plain English
+Think of object storage like a massive parking garage. Each parking spot has a unique ID (the key), and you can park any type of vehicle (object) there. You can't modify a vehicle once parked—you'd have to remove it entirely and park a new one. But you can access any spot instantly by its ID, and the garage automatically handles all the complexity of managing millions of spots across multiple buildings.
+:::
+
+:::note In Technical Terms
 An object store is a key-value store for immutable data objects. We lose much of the writing flexibility we expect with file storage on a local disk in an object store. Objects don't support random writes or append operations; instead, they are written once as a stream of bytes. After this initial write, objects become immutable. To change data in an object or append data to it, we must rewrite the full object. Object stores generally support random reads through range requests, but these lookups may perform much worse than random reads from data stored on an SSD.
+:::
+
+:::tip Why It Matters
+Object storage is the foundation of modern data architecture. It enables separation of compute and storage, allowing ephemeral clusters to scale independently. Object stores support massive parallelism (thousands of disks reading simultaneously), provide built-in durability and availability across zones, and cost far less than alternatives at scale. This makes them ideal for data lakes, data warehouses, and ML pipelines.
+:::
 
 For a software developer used to leveraging local random access file storage, the characteristics of objects might seem like constraints, but less is more; object stores don't need to support locks or change synchronization, allowing data storage across massive disk clusters. Object stores support extremely performant parallel stream writes and reads across many disks, and this parallelism is hidden from engineers, who can simply deal with the stream rather than communicating with individual disks. In a cloud environment, write speed scales with the number of streams being written up to quota limits set by the vendor. Read bandwidth can scale with the number of parallel requests, the number of virtual machines employed to read data, and the number of CPU cores. These characteristics make object storage ideal for serving high-volume web traffic or delivering data to highly parallel distributed query engines.
 
@@ -281,7 +573,7 @@ Typical cloud object stores save data in several availability zones, dramaticall
 
 Cloud object storage is a key ingredient in separating compute and storage, allowing engineers to process data with ephemeral clusters and scale these clusters up and down on demand. This is a key factor in making big data available to smaller organizations that can't afford to own hardware for data jobs that they'll run only occasionally. Some major tech companies will continue to run permanent Hadoop clusters on their hardware. Still, the general trend is that most organizations will move data processing to the cloud, using an object store as essential storage and serving layer while processing data on ephemeral clusters.
 
-In object storage, available storage space is also highly scalable, an ideal characteristic for big data systems. Storage space is constrained by the number of disks the storage provider owns, but these providers handle exabytes of data. In a cloud environment, available storage space is virtually limitless; in practice, the primary limit on storage space for public cloud customers is budget. From a practical standpoint, engineers can quickly store massive quantities of data for projects without planning months in advance for necessary servers and disks.
+In object storage, available storage space is also highly scalable, an ideal characteristic for big data systems. Storage space is constrained by the number of disks the storage provider owns, but these providers handle exabytes of data. In a cloud environment, available storage space is virtually limitless; in practice, the primary limit on storage space for public cloud customers is budget.
 
 #### Object stores for data engineering applications
 
@@ -312,6 +604,15 @@ On the surface, this looks like subdirectories you might find in a regular file 
 As mentioned, object stores don't support in-place updates or appends as a general rule. We write a new object under the same key to update an object. When data engineers utilize updates in data processes, they must be aware of the consistency model for the object store they're using. Object stores may be eventually consistent or strongly consistent. For example, until recently, S3 was eventually consistent; after a new version of an object was written under the same key, the object store might sometimes return the old version of the object. The eventual part of eventual consistency means that after enough time has passed, the storage cluster reaches a state such that only the latest version of the object will be returned. This contrasts with the strong consistency model we expect of local disks attached to a server: reading after a write will return the most recently written data.
 
 It might be desirable to impose strong consistency on an object store for various reasons, and standard methods are used to achieve this. One approach is to add a strongly consistent database (e.g., PostgreSQL) to the mix.
+
+<ProcessFlow
+  steps={[
+    { label: 'Write Object', description: 'Write object to object store' },
+    { label: 'Write Metadata', description: 'Write version metadata to consistent database' },
+    { label: 'Read Metadata', description: 'Fetch latest from consistent database' },
+    { label: 'Read & Verify', description: 'Read object and verify metadata match' }
+  ]}
+/>
 
 Object versioning is closely related to object consistency. When we rewrite an object under an existing key in an object store, we're essentially writing a brand-new object, setting references from the existing key to the object, and deleting the old object references. Updating all references across the cluster takes time, hence the potential for stale reads. Eventually, the storage cluster garbage collector deallocates the space dedicated to the dereferenced data, recycling disk capacity for use by new objects.
 
@@ -355,17 +656,39 @@ Like Memcached, Redis is a key-value store, but it supports somewhat more comple
 
 In the recent past, "Hadoop" was virtually synonymous with "big data." The Hadoop Distributed File System is based on Google File System (GFS) and was initially engineered to process data with the MapReduce programming model. Hadoop is similar to object storage but with a key difference: Hadoop combines compute and storage on the same nodes, where object stores typically have limited support for internal processing.
 
+<DiagramContainer title="HDFS Architecture">
+  <Group label="HDFS Cluster">
+    <Box color={colors.blue} label="NameNode" />
+    <Box color={colors.gray} label="Metadata management" size="small" />
+    <Arrow direction="down" />
+    <Group label="DataNodes">
+      <Column>
+        <Box color={colors.green} label="Node 1" size="small" />
+        <Box color={colors.gray} label="Data blocks + compute" size="small" />
+      </Column>
+      <Column>
+        <Box color={colors.green} label="Node 2" size="small" />
+        <Box color={colors.gray} label="Data blocks + compute" size="small" />
+      </Column>
+      <Column>
+        <Box color={colors.green} label="Node 3" size="small" />
+        <Box color={colors.gray} label="Data blocks + compute" size="small" />
+      </Column>
+    </Group>
+  </Group>
+</DiagramContainer>
+
 Hadoop breaks large files into blocks, chunks of data less than a few hundred megabytes in size. The filesystem is managed by the NameNode, which maintains directories, file metadata, and a detailed catalog describing the location of file blocks in the cluster. In a typical configuration, each block of data is replicated to three nodes. This increases both the durability and availability of data. If a disk or node fails, the replication factor for some file blocks will fall below 3. The NameNode will instruct other nodes to replicate these file blocks so that they again reach the correct replication factor. Thus, the probability of losing data is very low, barring a correlated failure (e.g., an asteroid hitting the data center).
 
 Hadoop is not simply a storage system. Hadoop combines compute resources with storage nodes to allow in-place data processing. This was originally achieved using the MapReduce programming model.
 
-#### Hadoop is dead. Long live Hadoop!
-
+:::note Hadoop is dead. Long live Hadoop!
 We often see claims that Hadoop is dead. This is only partially true. Hadoop is no longer a hot, bleeding-edge technology. Many Hadoop ecosystem tools such as Apache Pig are now on life support and primarily used to run legacy jobs. The pure MapReduce programming model has fallen by the wayside. HDFS remains widely used in various applications and organizations.
 
 Hadoop still appears in many legacy installations. Many organizations that adopted Hadoop during the peak of the big data craze have no immediate plans to migrate to newer technologies. This is a good choice for companies that run massive (thousand-node) Hadoop clusters and have the resources to maintain on-premises systems effectively. Smaller companies may want to reconsider the cost overhead and scale limitations of running a small Hadoop cluster against migrating to cloud solutions.
 
 In addition, HDFS is a key ingredient of many current big data engines, such as Amazon EMR. In fact, Apache Spark is still commonly run on HDFS clusters.
+:::
 
 ### Streaming Storage
 
@@ -389,6 +712,19 @@ An early data warehouse was typically built on the same type of RDBMS used for t
 
 Columnar serialization allows a database to scan only the columns required for a particular query, sometimes dramatically reducing the amount of data read from the disk. In addition, arranging data by column packs similar values next to each other, yielding high-compression ratios with minimal compression overhead. This allows data to be scanned more quickly from disk and over a network.
 
+<ComparisonTable
+  title="Row-Oriented vs Columnar Storage"
+  columns={['Characteristic', 'Row-Oriented', 'Columnar']}
+  rows={[
+    ['Data Organization', 'Stores complete rows together', 'Stores columns separately'],
+    ['Best For', 'Transactional lookups, updates', 'Analytics queries, aggregations'],
+    ['Read Pattern', 'Read entire row quickly', 'Read specific columns only'],
+    ['Compression', 'Lower compression ratios', 'High compression (similar values)'],
+    ['Write Performance', 'Fast individual row writes', 'Slower for single rows'],
+    ['Scan Performance', 'Slow for large scans', 'Fast for large scans']
+  ]}
+/>
+
 Columnar databases perform poorly for transactional use cases—i.e., when we try to look up large numbers of individual rows asynchronously. However, they perform extremely well when large quantities of data must be scanned—e.g., for complex data transformations, aggregations, statistical calculations, or evaluation of complex conditions on large datasets.
 
 In the past, columnar databases performed poorly on joins, so the advice for data engineers was to denormalize data, using wide schemas, arrays, and nested data wherever possible. Join performance for columnar databases has improved dramatically in recent years, so while there can still be performance advantages in denormalization, this is no longer a necessity.
@@ -401,7 +737,13 @@ Clusters allow finer-grained organization of data within partitions. A clusterin
 
 #### Example: Snowflake micro-partitioning
 
-We mention Snowflake micro-partitioning because it's a good example of recent developments and evolution in approaches to columnar storage. Micro partitions are sets of rows between 50 and 500 megabytes in uncompressed size. Snowflake uses an algorithmic approach that attempts to cluster together similar rows. This contrasts the traditional naive approach to partitioning on a single designated field, such as a date. Snowflake specifically looks for values that are repeated in a field across many rows. This allows aggressive pruning of queries based on predicates.
+We mention Snowflake micro-partitioning because it's a good example of recent developments and evolution in approaches to columnar storage. Micro partitions are sets of rows between 50 and 500 megabytes in uncompressed size. Snowflake uses an algorithmic approach that attempts to cluster together similar rows. This contrasts the traditional naive approach to partitioning on a single designated field, such as a date. Snowflake specifically looks for values that are repeated in a field across many rows. This allows aggressive pruning of queries based on predicates. For example, a WHERE clause might stipulate the following:
+
+```sql
+WHERE created_date='2022-01-02'
+```
+
+In such a query, Snowflake excludes any micro-partitions that don't include this date, effectively pruning this data. Snowflake also allows overlapping micro-partitions, potentially partitioning on multiple fields showing significant repeats.
 
 Efficient pruning is facilitated by Snowflake's metadata database, which stores a description of each micro-partition, including the number of rows and value ranges for fields. At each query stage, Snowflake analyzes micro-partitions to determine which ones need to be scanned. Snowflake uses the term hybrid columnar storage, partially referring to the fact that its tables are broken into small groups of rows, even though storage is fundamentally columnar. The metadata database plays a role similar to an index in a traditional relational database.
 
@@ -413,17 +755,30 @@ The main types of abstractions we'll concern ourselves with are those that suppo
 
 The storage abstraction you require as a data engineer boils down to a few key considerations:
 
-**Purpose and use case**
-You must first identify the purpose of storing the data. What is it used for?
-
-**Update patterns**
-Is the abstraction optimized for bulk updates, streaming inserts, or upserts?
-
-**Cost**
-What are the direct and indirect financial costs? The time to value? The opportunity costs?
-
-**Separate storage and compute**
-The trend is toward separating storage and compute, but most systems hybridize separation and colocation.
+<CardGrid
+  cards={[
+    {
+      title: 'Purpose and Use Case',
+      description: 'You must first identify the purpose of storing the data. What is it used for?',
+      icon: '🎯'
+    },
+    {
+      title: 'Update Patterns',
+      description: 'Is the abstraction optimized for bulk updates, streaming inserts, or upserts?',
+      icon: '🔄'
+    },
+    {
+      title: 'Cost',
+      description: 'What are the direct and indirect financial costs? The time to value? The opportunity costs?',
+      icon: '💰'
+    },
+    {
+      title: 'Separate Storage and Compute',
+      description: 'The trend is toward separating storage and compute, but most systems hybridize separation and colocation',
+      icon: '🔌'
+    }
+  ]}
+/>
 
 You should know that the popularity of separating storage from compute means the lines between OLAP databases and data lakes are increasingly blurring. Major cloud data warehouses and data lakes are on a collision course. In the future, the differences between these two may be in name only since they might functionally and technically be very similar under the hood.
 
@@ -442,6 +797,16 @@ The last five years have seen two major developments in the evolution of data la
 ### The Data Lakehouse
 
 The data lakehouse is an architecture that combines aspects of the data warehouse and the data lake. As it is generally conceived, the lakehouse stores data in object storage just like a lake. However, the lakehouse adds to this arrangement features designed to streamline data management and create an engineering experience similar to a data warehouse. This means robust table and schema support and features for managing incremental updates and deletes. Lakehouses typically also support table history and rollback; this is accomplished by retaining old versions of files and metadata.
+
+<DiagramContainer title="Data Lakehouse Architecture">
+  <StackDiagram
+    layers={[
+      { label: 'Query & Analytics Layer', description: 'Spark, Presto, data science tools', color: colors.purple },
+      { label: 'Metadata & Management', description: 'Delta Lake, Hudi, Iceberg', color: colors.blue },
+      { label: 'Object Storage', description: 'S3, Azure Blob, GCS - Parquet/ORC files', color: colors.green }
+    ]}
+  />
+</DiagramContainer>
 
 A lakehouse system is a metadata and file-management layer deployed with data management and transformation tools. Databricks has heavily promoted the lakehouse concept with Delta Lake, an open source storage management system.
 
@@ -463,6 +828,23 @@ At this point, the notion of the data platform frankly has yet to be fully flesh
 
 The stream-to-batch storage architecture has many similarities to the Lambda architecture, though some might quibble over the technical details. Essentially, data flowing through a topic in the streaming storage system is written out to multiple consumers.
 
+<DiagramContainer title="Stream-to-Batch Architecture">
+  <Group label="Streaming Source">
+    <Box color={colors.blue} label="Kafka / Kinesis Topic" />
+    <Arrow direction="down" />
+    <Row>
+      <Column>
+        <Box color={colors.purple} label="Real-Time Processing" size="small" />
+        <Box color={colors.gray} label="Immediate statistics" size="small" />
+      </Column>
+      <Column>
+        <Box color={colors.green} label="Batch Storage Consumer" size="small" />
+        <Box color={colors.gray} label="S3 / Object storage" size="small" />
+      </Column>
+    </Row>
+  </Group>
+</DiagramContainer>
+
 Some of these consumers might be real-time processing systems that generate statistics on the stream. In addition, a batch storage consumer writes data for long-term retention and batch queries. The batch consumer could be AWS Kinesis Firehose, which can generate S3 objects based on configurable triggers (e.g., time and batch size). Systems such as BigQuery ingest streaming data into a streaming buffer. This streaming buffer is automatically reserialized into columnar object storage. The query engine supports seamless querying of both the streaming buffer and the object data to provide users a current, nearly real-time view of the table.
 
 ## Big Ideas and Trends in Storage
@@ -475,17 +857,25 @@ A data catalog is a centralized metadata store for all data across an organizati
 
 Data catalogs are often used to provide a central place where people can view their data, queries, and data storage. As a data engineer, you'll likely be responsible for setting up and maintaining the various data integrations of data pipeline and storage systems that will integrate with the data catalog and the integrity of the data catalog itself.
 
-#### Catalog application integration
-
-Ideally, data applications are designed to integrate with catalog APIs to handle their metadata and updates directly. As catalogs are more widely used in an organization, it becomes easier to approach this ideal.
-
-#### Automated scanning
-
-In practice, cataloging systems typically need to rely on an automated scanning layer that collects metadata from various systems such as data lakes, data warehouses, and operational databases. Data catalogs can collect existing metadata and may also use scanning tools to infer metadata such as key relationships or the presence of sensitive data.
-
-#### Data portal and social layer
-
-Data catalogs also typically provide a human access layer through a web interface, where users can search for data and view data relationships. Data catalogs can be enhanced with a social layer offering Wiki functionality. This allows users to provide information on their datasets, request information from other users, and post updates as they become available.
+<CardGrid
+  cards={[
+    {
+      title: 'Catalog Application Integration',
+      description: 'Data applications designed to integrate with catalog APIs to handle metadata and updates directly',
+      icon: '🔌'
+    },
+    {
+      title: 'Automated Scanning',
+      description: 'Scanning layer that collects metadata from various systems like data lakes, warehouses, and databases',
+      icon: '🔍'
+    },
+    {
+      title: 'Data Portal and Social Layer',
+      description: 'Web interface for searching data, viewing relationships, and Wiki functionality for collaboration',
+      icon: '🌐'
+    }
+  ]}
+/>
 
 #### Data catalog use cases
 
@@ -507,7 +897,23 @@ What is the expected form of the data? What is the file format? Is it structured
 
 Note that schema need not be relational. Rather, data becomes more useful when we have as much information about its structure and organization. For images stored in a data lake, this schema information might explain the image format, resolution, and the way the images fit into a larger hierarchy.
 
-Schema can function as a sort of Rosetta stone, instructions that tell us how to read the data. Two major schema patterns exist: schema on write and schema on read. Schema on write is essentially the traditional data warehouse pattern: a table has an integrated schema; any writes to the table must conform. To support schema on write, a data lake must integrate a schema metastore.
+Schema can function as a sort of Rosetta stone, instructions that tell us how to read the data. Two major schema patterns exist: schema on write and schema on read.
+
+<ComparisonTable
+  title="Schema on Write vs Schema on Read"
+  columns={['Aspect', 'Schema on Write', 'Schema on Read']}
+  rows={[
+    ['When Applied', 'Schema enforced during data write', 'Schema determined during data read'],
+    ['Flexibility', 'Rigid - data must conform to schema', 'Flexible - any data can be written'],
+    ['Data Quality', 'High - enforced standards', 'Variable - depends on reader'],
+    ['Write Performance', 'Slower - validation overhead', 'Faster - no validation'],
+    ['Read Performance', 'Faster - known structure', 'Slower - schema inference needed'],
+    ['Best For', 'Data warehouses, consistent data', 'Data lakes, exploratory analysis'],
+    ['Example', 'Traditional RDBMS tables', 'JSON/Parquet files in object storage']
+  ]}
+/>
+
+Schema on write is essentially the traditional data warehouse pattern: a table has an integrated schema; any writes to the table must conform. To support schema on write, a data lake must integrate a schema metastore.
 
 With schema on read, the schema is dynamically created when data is written, and a reader must determine the schema when reading the data. Ideally, schema on read is implemented using file formats that implement built-in schema information, such as Parquet or JSON. CSV files are notorious for schema inconsistency and are not recommended in this setting.
 
@@ -527,12 +933,35 @@ The same basic idea applies for analytics query systems running across a cluster
 
 If colocation of compute and storage delivers high performance, why the shift toward separation of compute and storage? Several motivations exist.
 
-**Ephemerality and scalability**
+<CardGrid
+  cards={[
+    {
+      title: 'Ephemerality and Scalability',
+      description: "It's cheaper to rent servers from cloud when workloads vary. Spin up massive clusters for jobs, then delete when done",
+      icon: '🔄'
+    },
+    {
+      title: 'Data Durability and Availability',
+      description: 'Cloud object stores replicate across zones. If disaster destroys a zone, data remains available from other zones',
+      icon: '🛡️'
+    },
+    {
+      title: 'Cost Optimization',
+      description: 'Pay only for compute when processing. Storage costs are minimal compared to 24/7 server operation',
+      icon: '💰'
+    },
+    {
+      title: 'Independent Scaling',
+      description: 'Scale storage and compute independently based on actual needs rather than being locked to fixed ratios',
+      icon: '📈'
+    }
+  ]}
+/>
+
 In the cloud, we've seen a dramatic shift toward ephemerality. In general, it's cheaper to buy and host a server than to rent it from a cloud provider, provided that you're running it 24 hours a day nonstop for years on end. In practice, workloads vary dramatically, and significant efficiencies are realized with a pay-as-you-go model if servers can scale up and down. This is true for web servers in online retail, and it is also true for big data batch jobs that may run only periodically.
 
 Ephemeral compute resources allow engineers to spin up massive clusters to complete jobs on time and then delete clusters when these jobs are done. The performance benefits of temporarily operating at ultra-high scale can outweigh the bandwidth limitations of object storage.
 
-**Data durability and availability**
 Cloud object stores significantly mitigate the risk of data loss and generally provide extremely high uptime (availability). For example, S3 stores data across multiple zones; if a natural disaster destroys a zone, data is still available from the remaining zones. Having multiple zones available also reduces the odds of a data outage. If resources in one zone go down, engineers can spin up the same resources in a different zone.
 
 The potential for a misconfiguration that destroys data in object storage is still somewhat scary, but simple-to-deploy mitigations are available. Copying data to multiple cloud regions reduces this risk since configuration changes are generally deployed to only one region at a time. Replicating data to multiple storage providers can further reduce the risk.
@@ -545,57 +974,89 @@ With multitier caching, we utilize object storage for long-term data retention a
 
 Let's look at examples of how some popular processing engines hybridize separation and colocation of storage and compute.
 
-**Example: AWS EMR with S3 and HDFS**
-Big data services like Amazon EMR spin up temporary HDFS clusters to process data. Engineers have the option of referencing both S3 and HDFS as a filesystem. A common pattern is to stand up HDFS on SSD drives, pull from S3, and save data from intermediate processing steps on local HDFS. Doing so can realize significant performance gains over processing directly from S3. Full results are written back to S3 once the cluster completes its steps, and the cluster and HDFS are deleted. Other consumers read the output data directly from S3.
-
-**Example: Apache Spark**
-In practice, Spark generally runs jobs on HDFS or some other ephemeral distributed filesystem to support performant storage of data between processing steps. In addition, Spark relies heavily on in-memory storage of data to improve processing. The problem with owning the infrastructure for running Spark is that dynamic RAM (DRAM) is extremely expensive; by separating compute and storage in the cloud, we can rent large quantities of memory and then release that memory when the job completes.
-
-**Example: Apache Druid**
-Apache Druid relies heavily on SSDs to realize high performance. Since SSDs are significantly more expensive than magnetic disks, Druid keeps only one copy of data in its cluster, reducing "live" storage costs by a factor of three.
-
-Of course, maintaining data durability is still critical, so Druid uses an object store as its durability layer. When data is ingested, it's processed, serialized into compressed columns, and written to cluster SSDs and object storage. In the event of node failure or cluster data corruption, data can be automatically recovered to new nodes. In addition, the cluster can be shut down and then fully recovered from SSD storage.
-
-**Example: Hybrid object storage**
-Google's Colossus file storage system supports fine-grained control of data block location, although this functionality is not exposed directly to the public. BigQuery uses this feature to colocate customer tables in a single location, allowing ultra-high bandwidth for queries in that location. We refer to this as hybrid object storage because it combines the clean abstractions of object storage with some advantages of colocating compute and storage. Amazon also offers some notion of hybrid object storage through S3 Select, a feature that allows users to filter S3 data directly in S3 clusters before data is returned across the network.
-
-We speculate that public clouds will adopt hybrid object storage more widely to improve the performance of their offerings and make more efficient use of available network resources. Some may be already doing so without disclosing this publicly.
+<CardGrid
+  cards={[
+    {
+      title: 'AWS EMR with S3 and HDFS',
+      description: 'Spin up temporary HDFS on SSD drives, pull from S3, store intermediate results on HDFS, write final results to S3',
+      icon: '☁️'
+    },
+    {
+      title: 'Apache Spark',
+      description: 'Runs on ephemeral HDFS for intermediate storage, relies heavily on in-memory data to improve processing performance',
+      icon: '⚡'
+    },
+    {
+      title: 'Apache Druid',
+      description: 'Keeps one copy on SSDs for performance, uses object store as durability layer. Can recover from node failures automatically',
+      icon: '🚀'
+    },
+    {
+      title: 'Hybrid Object Storage',
+      description: "BigQuery's Colossus colocates customer data. S3 Select filters data in S3 clusters before network transmission",
+      icon: '🔄'
+    }
+  ]}
+/>
 
 The concept of hybrid object storage underscores that there can still be advantages to having low-level access to hardware rather than relying on someone else's public cloud. Public cloud services do not expose low-level details of hardware and systems (e.g., data block locations for Colossus), but these details can be extremely useful in performance optimization and enhancement.
 
 While we're now seeing a mass migration of data to public clouds, we believe that many hyper-scale data service vendors that currently run on public clouds provided by other vendors may build their data centers in the future, albeit with deep network integration into public clouds.
 
-### Zero-copy cloning
+### Zero-copy Cloning
 
 Cloud-based systems based around object storage support zero-copy cloning. This typically means that a new virtual copy of an object is created (e.g., a new table) without necessarily physically copying the underlying data. Typically, new pointers are created to the raw data files, and future changes to these tables will not be recorded in the old table. For those familiar with the inner workings of object-oriented languages such as Python, this type of "shallow" copying is familiar from other contexts.
 
+:::warning Important
 Zero-copy cloning is a compelling feature, but engineers must understand its strengths and limitations. For example, cloning an object in a data lake environment and then deleting the files in the original object might also wipe out the new object.
 
-For fully managed object-store-based systems (e.g., Snowflake and BigQuery), engineers need to be extremely familiar with the exact limits of shallow copying. Engineers have more access to underlying object storage in data lake systems such as Databricks—a blessing and a curse. Data engineers should exercise great caution before deleting any raw files in the underlying object store. Databricks and other data lake management technologies sometimes also support a notion of deep copying, whereby all underlying data objects are copied. This is a more expensive process, but also more robust in the event that files are unintentionally lost or deleted.
+For fully managed object-store-based systems (e.g., Snowflake and BigQuery), engineers need to be extremely familiar with the exact limits of shallow copying. Engineers have more access to underlying object storage in data lake systems such as Databricks—a blessing and a curse. Data engineers should exercise great caution before deleting any raw files in the underlying object store.
+:::
 
-## Data Storage Lifecycle and Data Retention
+Databricks and other data lake management technologies sometimes also support a notion of deep copying, whereby all underlying data objects are copied. This is a more expensive process, but also more robust in the event that files are unintentionally lost or deleted.
+
+### Data Storage Lifecycle and Data Retention
 
 Storing data isn't as simple as just saving it to object storage or disk and forgetting about it. You need to think about the data storage lifecycle and data retention. When you think about access frequency and use cases, ask, "How important is the data to downstream users, and how often do they need to access it?" This is the data storage lifecycle. Another question you should ask is, "How long should I keep this data?" Do you need to retain data indefinitely, or are you fine discarding it past a certain time frame? This is data retention. Let's dive into each of these.
 
-### Hot, warm, and cold data
+#### Hot, warm, and cold data
 
 Did you know that data has a temperature? Depending on how frequently data is accessed, we can roughly bucket the way it is stored into three categories of persistence: hot, warm, and cold. Query access patterns differ for each dataset. Typically, newer data is queried more often than older data. Let's look at hot, cold, and warm data in that order.
 
-#### Hot data
+<DiagramContainer title="Data Temperature Tiers">
+  <CardGrid
+    cards={[
+      {
+        title: 'Hot Data',
+        description: 'Instant access • SSD/Memory • Most expensive storage • Cheap retrieval',
+        metric: 'Product pages, recommendations',
+        color: colors.red
+      },
+      {
+        title: 'Warm Data',
+        description: 'Semi-regular access • Standard object storage • Moderate cost • Moderate retrieval',
+        metric: 'Monthly reports, recent logs',
+        color: colors.orange
+      },
+      {
+        title: 'Cold Data',
+        description: 'Infrequent access • HDD/Tape/Archive • Cheapest storage • Expensive retrieval',
+        metric: 'Compliance archives, backups',
+        color: colors.blue
+      }
+    ]}
+  />
+</DiagramContainer>
 
-Hot data has instant or frequent access requirements. The underlying storage for hot data is suited for fast access and reads, such as SSD or memory. Because of the type of hardware involved with hot data, storing hot data is often the most expensive form of storage. Example use cases for hot data include retrieving product recommendations and product page results. The cost of storing hot data is the highest of these three storage tiers, but retrieval is often inexpensive.
+**Hot data** has instant or frequent access requirements. The underlying storage for hot data is suited for fast access and reads, such as SSD or memory. Because of the type of hardware involved with hot data, storing hot data is often the most expensive form of storage. Example use cases for hot data include retrieving product recommendations and product page results. The cost of storing hot data is the highest of these three storage tiers, but retrieval is often inexpensive.
 
 Query results cache is another example of hot data. When a query is run, some query engines will persist the query results in the cache. For a limited time, when the same query is run, instead of rerunning the same query against storage, the query results cache serves the cached results. This allows for much faster query response times versus redundantly issuing the same query repeatedly.
 
-#### Warm data
+**Warm data** is accessed semi-regularly, say, once per month. No hard and fast rules indicate how often warm data is accessed, but it's less than hot data and more than cold data. The major cloud providers offer object storage tiers that accommodate warm data. For example, S3 offers an Infrequently Accessed Tier, and Google Cloud has a similar storage tier called Nearline. Storage of warm data is cheaper than hot data, with slightly more expensive retrieval costs.
 
-Warm data is accessed semi-regularly, say, once per month. No hard and fast rules indicate how often warm data is accessed, but it's less than hot data and more than cold data. The major cloud providers offer object storage tiers that accommodate warm data. For example, S3 offers an Infrequently Accessed Tier, and Google Cloud has a similar storage tier called Nearline. Vendors give their models of recommended access frequency, and engineers can also do their cost modeling and monitoring. Storage of warm data is cheaper than hot data, with slightly more expensive retrieval costs.
+**Cold data** is infrequently accessed data. The hardware used to archive cold data is typically cheap and durable, such as HDD, tape storage, and cloud-based archival systems. Cold data is mainly meant for long-term archival, when there's little to no intention to access the data. Though storing cold data is cheap, retrieving cold data is often expensive.
 
-#### Cold data
-
-On the other extreme, cold data is infrequently accessed data. The hardware used to archive cold data is typically cheap and durable, such as HDD, tape storage, and cloud-based archival systems. Cold data is mainly meant for long-term archival, when there's little to no intention to access the data. Though storing cold data is cheap, retrieving cold data is often expensive.
-
-#### Storage tier considerations
+**Storage tier considerations**
 
 When considering the storage tier for your data, consider the costs of each tier. If you store all of your data in hot storage, all of the data can be accessed quickly. But this comes at a tremendous price! Conversely, if you store all data in cold storage to save on costs, you'll certainly lower your storage costs, but at the expense of prolonged retrieval times and high retrieval costs if you need to access data. The storage price goes down from faster/higher performing storage to lower storage.
 
@@ -605,31 +1066,63 @@ Data engineers need to account for spillover from hot to warm/cold storage. Memo
 
 If you're using cloud-based object storage, create automated lifecycle policies for your data. This will drastically reduce your storage costs. For example, if your data needs to be accessed only once a month, move the data to an infrequent access storage tier. If your data is 180 days old and not accessed for current queries, move it to an archival storage tier. In both cases, you can automate the migration of data away from regular object storage, and you'll save money. That said, consider the retrieval costs—both in time and money—using infrequent or archival style storage tiers. Access and retrieval times and costs may vary depending on the cloud provider. Some cloud providers make it simple and cheap to migrate data into archive storage, but it is costly and slow to retrieve your data.
 
-### Data retention
+#### Data retention
 
 Back in the early days of "big data," there was a tendency to err on the side of accumulating every piece of data possible, regardless of its usefulness. The expectation was, "we might need this data in the future." This data hoarding inevitably became unwieldy and dirty, giving rise to data swamps and regulatory crackdowns on data retention, among other consequences and nightmares. Nowadays, data engineers need to consider data retention: what data do you need to keep, and how long should you keep it? Here are some things to think about with data retention.
 
-#### Value
+<CardGrid
+  cards={[
+    {
+      title: 'Value',
+      description: 'Data is an asset. Know the value—is it irreplaceable or easily recreated? What is the impact if available vs not?',
+      icon: '💎'
+    },
+    {
+      title: 'Time',
+      description: 'New data is typically more valuable. Consider TTL for hot storage, move to warm/cold tiers based on age',
+      icon: '⏰'
+    },
+    {
+      title: 'Compliance',
+      description: 'HIPAA, PCI, GDPR may require retention for specific periods or mandate deletion within timeframes',
+      icon: '📜'
+    },
+    {
+      title: 'Cost',
+      description: 'Data should have positive ROI. Implement lifecycle management, archive or delete data past retention dates',
+      icon: '💰'
+    }
+  ]}
+/>
 
-Data is an asset, so you should know the value of the data you're storing. Of course, value is subjective and depends on what it's worth to your immediate use case and your broader organization. Is this data impossible to re-create, or can it easily be re-created by querying upstream systems? What's the impact to downstream users if this data is available versus if it is not?
-
-#### Time
-
-The value to downstream users also depends upon the age of the data. New data is typically more valuable and frequently accessed than older data. Technical limitations may determine how long you can store data in certain storage tiers. For example, if you store hot data in cache or memory, you'll likely need to set a time to live (TTL), so you can expire data after a certain point or persist it to warm or cold storage. Otherwise, your hot storage will become full, and queries against the hot data will suffer from performance lags.
-
-#### Compliance
-
-Certain regulations (e.g., HIPAA and Payment Card Industry, or PCI) might require you to keep data for a certain time. In these situations, the data simply needs to be accessible upon request, even if the likelihood of an access request is low. Other regulations might require you to hold data for only a limited period of time, and you'll need to have the ability to delete specific information on time and within compliance guidelines. You'll need a storage and archival data process—along with the ability to search the data—that fits the retention requirements of the particular regulation with which you need to comply. Of course, you'll want to balance compliance against cost.
-
-#### Cost
-
-Data is an asset that (hopefully) has an ROI. On the cost side of ROI, an obvious storage expense is associated with data. Consider the timeline in which you need to retain data. Given our discussion about hot, warm, and cold data, implement automatic data lifecycle management practices and move the data to cold storage if you don't need the data past the required retention date. Or delete data if it's truly not needed.
-
-## Single-Tenant Versus Multitenant Storage
+### Single-Tenant Versus Multitenant Storage
 
 In Chapter 3, we covered the trade-offs between single-tenant and multitenant architecture. To recap, with single-tenant architecture, each group of tenants (e.g., individual users, groups of users, accounts, or customers) gets its own dedicated set of resources such as networking, compute, and storage. A multitenant architecture inverts this and shares these resources among groups of users. Both architectures are widely used. This section looks at the implications of single-tenant and multitenant storage.
 
-Adopting single-tenant storage means that every tenant gets their dedicated storage. In the example, each tenant gets a database. No data is shared among these databases, and storage is totally isolated. An example of using single-tenant storage is that each customer's data must be stored in isolation and cannot be blended with any other customer's data. In this case, each customer gets their own database.
+<DiagramContainer title="Single-Tenant vs Multitenant Storage">
+  <Row spacing="large">
+    <Column>
+      <Box color={colors.blue} label="Single-Tenant Storage" />
+      <Group label="Dedicated Databases">
+        <Box color={colors.purple} label="Tenant A DB" size="small" />
+        <Box color={colors.purple} label="Tenant B DB" size="small" />
+        <Box color={colors.purple} label="Tenant C DB" size="small" />
+      </Group>
+      <Box color={colors.gray} label="Isolated schemas" size="small" />
+      <Box color={colors.gray} label="Independent evolution" size="small" />
+    </Column>
+    <Column>
+      <Box color={colors.green} label="Multitenant Storage" />
+      <Group label="Shared Database">
+        <Box color={colors.orange} label="All Tenants" size="small" />
+      </Group>
+      <Box color={colors.gray} label="Uniform schemas" size="small" />
+      <Box color={colors.gray} label="Efficient resource use" size="small" />
+    </Column>
+  </Row>
+</DiagramContainer>
+
+Adopting single-tenant storage means that every tenant gets their dedicated storage. In the example above, each tenant gets a database. No data is shared among these databases, and storage is totally isolated. An example of using single-tenant storage is that each customer's data must be stored in isolation and cannot be blended with any other customer's data. In this case, each customer gets their own database.
 
 Separate data storage implies separate and independent schemas, bucket structures, and everything related to storage. This means you have the liberty of designing each tenant's storage environment to be uniform or let them evolve however they may. Schema variation across customers can be an advantage and a complication; as always, consider the trade-offs. If each tenant's schema isn't uniform across all tenants, this has major consequences if you need to query multiple tenants' tables to create a unified view of all tenant data.
 
@@ -669,7 +1162,7 @@ Metadata management also significantly enhances data governance. Beyond simply e
 
 Major cloud object storage systems enable data versioning. Data versioning can help with error recovery when processes fail, and data becomes corrupted. Versioning is also beneficial for tracking the history of datasets used to build models. Just as code version control allows developers to track down commits that cause bugs, data version control can aid ML engineers in tracking changes that lead to model performance degradation.
 
-#### Privacy
+### Privacy
 
 GDPR and other privacy regulations have significantly impacted storage system design. Any data with privacy implications has a lifecycle that data engineers must manage. Data engineers must be prepared to respond to data deletion requests and selectively remove data as required. In addition, engineers can accommodate privacy and security through anonymization and masking.
 
@@ -705,7 +1198,7 @@ We can think about software engineering in the context of storage in two ways. F
 
 Storage is everywhere and underlays many stages of the data engineering lifecycle. In this chapter, you learned about the raw ingredients, types, abstractions, and big ideas around storage systems. Gain deep knowledge of the inner workings and limitations of the storage systems you'll use. Know the types of data, activities, and workloads appropriate for your storage.
 
-## Additional Resources
+### Additional Resources
 
 - "Column-Oriented DBMS" Wikipedia page
 - "The Design and Implementation of Modern Column-Oriented Database Systems" by Daniel Abadi et al.
