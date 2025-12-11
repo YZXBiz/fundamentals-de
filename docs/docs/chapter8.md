@@ -4,66 +4,105 @@ title: "Chapter 8: Queries, Modeling, and Transformation"
 description: "Learn how to make data useful through queries, data modeling, and transformations. Master query optimization, modeling patterns (Kimball, Inmon, Data Vault), and batch/streaming transformations."
 ---
 
-import { ProcessFlow, CardGrid, ComparisonTable, DiagramContainer, TreeDiagram, StackDiagram, Row, Column, Box, Arrow, Group, colors } from '@site/src/components/diagrams';
+import {
+  Box, Arrow, Row, Column, Group,
+  DiagramContainer, ProcessFlow, TreeDiagram,
+  CardGrid, StackDiagram, ComparisonTable,
+  colors
+} from '@site/src/components/diagrams';
 
 # Chapter 8: Queries, Modeling, and Transformation
 
-Up to this point, the stages of the data engineering lifecycle have primarily been about passing data from one place to another or storing it. In this chapter, you'll learn how to make data useful. By understanding queries, modeling, and transformations, you'll have the tools to turn raw data ingredients into something consumable by downstream stakeholders.
+> **"The net result of transforming data is the ability to unify and integrate data. Once data is transformed, the data can be viewed as a single entity. But without transforming data, you cannot have a unified view of data across the organization."**
+>
+> — Bill Inmon
+
+---
+
+## Table of Contents
+
+1. [Introduction](#1-introduction)
+2. [Queries](#2-queries)
+   - 2.1. [What Is a Query?](#21-what-is-a-query)
+   - 2.2. [The Life of a Query](#22-the-life-of-a-query)
+   - 2.3. [Improving Query Performance](#23-improving-query-performance)
+   - 2.4. [Queries on Streaming Data](#24-queries-on-streaming-data)
+3. [Data Modeling](#3-data-modeling)
+   - 3.1. [What Is a Data Model?](#31-what-is-a-data-model)
+   - 3.2. [Conceptual, Logical, and Physical Data Models](#32-conceptual-logical-and-physical-data-models)
+   - 3.3. [Normalization](#33-normalization)
+   - 3.4. [Techniques for Modeling Batch Analytical Data](#34-techniques-for-modeling-batch-analytical-data)
+   - 3.5. [Modeling Streaming Data](#35-modeling-streaming-data)
+4. [Transformations](#4-transformations)
+   - 4.1. [Batch Transformations](#41-batch-transformations)
+   - 4.2. [Streaming Transformations and Processing](#42-streaming-transformations-and-processing)
+5. [Whom You'll Work With](#5-whom-youll-work-with)
+6. [Undercurrents](#6-undercurrents)
+7. [Summary](#7-summary)
+
+---
+
+## 1. Introduction
+
+**In plain English:** Up to this point in the data engineering lifecycle, we've been moving data around and storing it. Now we're going to learn how to make it useful—like turning raw ingredients into a delicious meal. Queries, modeling, and transformations are the tools that turn raw data into something people can actually use.
+
+**In technical terms:** This chapter focuses on the transformation stage of the data engineering lifecycle, where we apply queries to retrieve data, implement data models to structure business logic, and create transformations that persist results for downstream consumption. These processes convert raw data into consumable analytics assets.
+
+**Why it matters:** Without effective queries, modeling, and transformations, data remains raw and unusable. These practices create the foundation for analytics, reporting, machine learning, and data-driven decision making across your organization.
 
 <DiagramContainer title="Transformations Create Value from Data">
   <ProcessFlow
+    direction="horizontal"
     steps={[
-      { label: 'Raw Data', color: colors.gray },
-      { label: 'Queries', color: colors.blue },
-      { label: 'Modeling', color: colors.purple },
-      { label: 'Transformation', color: colors.green },
-      { label: 'Consumable Data', color: colors.emerald }
+      {
+        title: "Raw Data",
+        description: "Unstructured, siloed sources",
+        icon: "📊",
+        color: colors.slate
+      },
+      {
+        title: "Queries",
+        description: "Retrieve and filter",
+        icon: "🔍",
+        color: colors.blue
+      },
+      {
+        title: "Modeling",
+        description: "Structure business logic",
+        icon: "🏗️",
+        color: colors.purple
+      },
+      {
+        title: "Transformation",
+        description: "Persist and enhance",
+        icon: "⚙️",
+        color: colors.green
+      },
+      {
+        title: "Consumable Data",
+        description: "Ready for analytics",
+        icon: "✨",
+        color: colors.emerald
+      }
     ]}
   />
 </DiagramContainer>
 
-We'll first discuss queries and the significant patterns underlying them. Second, we will look at the major data modeling patterns you can use to introduce business logic into your data. Then, we'll cover transformations, which take the logic of your data models and the results of queries and make them useful for more straightforward downstream consumption. Finally, we'll cover whom you'll work with and the undercurrents as they relate to this chapter.
-
-A variety of techniques can be used to query, model, and transform data in SQL and NoSQL databases. This section focuses on queries made to an OLAP system, such as a data warehouse or data lake. Although many languages exist for querying, for the sake of convenience and familiarity, throughout most of this chapter, we'll focus heavily on SQL, the most popular and universal query language. Most of the concepts for OLAP databases and SQL will translate to other types of databases and query languages. This chapter assumes you have an understanding of the SQL language and related concepts like primary and foreign keys.
+> **Insight**
+>
+> This chapter assumes you have a basic understanding of SQL and related concepts like primary and foreign keys. We focus mainly on OLAP systems such as data warehouses and data lakes, though most concepts translate to other database types.
 
 :::info Note on Terminology
-For convenience, we'll use the term **database** as a shorthand for a query engine and the storage it's querying; this could be a cloud data warehouse or Apache Spark querying data stored in S3. We assume the database has a storage engine that organizes the data under the hood. This extends to file-based queries (loading a CSV file into a Python notebook) and queries against file formats such as Parquet.
+For convenience, we'll use the term **database** as a shorthand for a query engine and the storage it's querying; this could be a cloud data warehouse or Apache Spark querying data stored in S3. We assume the database has a storage engine that organizes the data under the hood.
 :::
 
-Also, note that this chapter focuses mainly on the query, modeling patterns, and transformations related to structured and semistructured data, which data engineers use often. Many of the practices discussed can also be applied to working with unstructured data such as images, video, and raw text.
+---
 
-Before we get into modeling and transforming data, let's look at queries—what they are, how they work, considerations for improving query performance, and queries on streaming data.
+## 2. Queries
 
-## Table of Contents
+Queries are a fundamental part of data engineering, data science, and analysis. Before you learn about transformations and data modeling, you need to understand what queries are, how they work, and techniques for improving their performance.
 
-1. [Queries](#queries)
-   - [What Is a Query?](#what-is-a-query)
-   - [The Life of a Query](#the-life-of-a-query)
-   - [Improving Query Performance](#improving-query-performance)
-   - [Queries on Streaming Data](#queries-on-streaming-data)
-2. [Data Modeling](#data-modeling)
-   - [What Is a Data Model?](#what-is-a-data-model)
-   - [Conceptual, Logical, and Physical Data Models](#conceptual-logical-and-physical-data-models)
-   - [Normalization](#normalization)
-   - [Techniques for Modeling Batch Analytical Data](#techniques-for-modeling-batch-analytical-data)
-   - [Modeling Streaming Data](#modeling-streaming-data)
-3. [Transformations](#transformations)
-   - [Batch Transformations](#batch-transformations)
-   - [Streaming Transformations and Processing](#streaming-transformations-and-processing)
-4. [Whom You'll Work With](#whom-youll-work-with)
-5. [Undercurrents](#undercurrents)
-
-## Queries
-
-Queries are a fundamental part of data engineering, data science, and analysis. Before you learn about the underlying patterns and technologies for transformations, you need to understand what queries are, how they work on various data, and techniques for improving query performance.
-
-This section primarily concerns itself with queries on tabular and semistructured data. As a data engineer, you'll most frequently query and transform these data types. Before we get into more complicated topics about queries, data modeling, and transformations, let's start by answering a pretty simple question: what is a query?
-
-### What Is a Query?
-
-We often run into people who know how to write SQL but are unfamiliar with how a query works under the hood. Some of this introductory material on queries will be familiar to experienced data engineers; feel free to skip ahead if this applies to you.
-
-:::tip Three-Part Explanation
+### 2.1. What Is a Query?
 
 **In plain English:** A query is like asking a question to your database. Instead of manually searching through thousands of records, you write instructions that tell the database exactly what information you want to retrieve.
 
@@ -71,117 +110,154 @@ We often run into people who know how to write SQL but are unfamiliar with how a
 
 **Why it matters:** Understanding queries is fundamental to data engineering because they're the primary interface between you and your data. Well-written queries can make the difference between a system that takes hours to respond and one that returns results in seconds.
 
-:::
+#### Query Language Categories
 
-A query allows you to retrieve and act on data. Recall our conversation in Chapter 5 about CRUD. When a query retrieves data, it is issuing a request to read a pattern of records. This is the R (read) in CRUD. You might issue a query that gets all records from a table `foo`, such as `SELECT * FROM foo`. Or, you might apply a predicate (logical condition) to filter your data by retrieving only records where the id is 1, using the SQL query `SELECT * FROM foo WHERE id=1`.
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Data Definition Language (DDL)",
+      icon: "🏗️",
+      color: colors.blue,
+      items: [
+        "Performs operations on database objects",
+        "CREATE tables and schemas",
+        "DROP objects",
+        "ALTER structures"
+      ]
+    },
+    {
+      title: "Data Manipulation Language (DML)",
+      icon: "✏️",
+      color: colors.purple,
+      items: [
+        "Adds and alters data within objects",
+        "SELECT data",
+        "INSERT, UPDATE, DELETE records",
+        "COPY and MERGE operations"
+      ]
+    },
+    {
+      title: "Data Control Language (DCL)",
+      icon: "🔒",
+      color: colors.green,
+      items: [
+        "Controls access to database objects",
+        "GRANT permissions",
+        "DENY access",
+        "REVOKE privileges"
+      ]
+    },
+    {
+      title: "Transaction Control Language (TCL)",
+      icon: "🔄",
+      color: colors.orange,
+      items: [
+        "Controls transaction details",
+        "COMMIT changes",
+        "ROLLBACK to previous state",
+        "Manage checkpoints"
+      ]
+    }
+  ]}
+/>
 
-Many databases allow you to create, update, and delete data. These are the CUD in CRUD; your query will either create, mutate, or destroy existing records. Let's review some other common acronyms you'll run into when working with query languages.
+#### DCL Example: Managing User Access
 
-<CardGrid columns={2}>
-  <div>
-    <h4>Data Definition Language (DDL)</h4>
-    <p>Performs operations on database objects like schemas, tables, or users. Defines the state of objects in your database.</p>
-    <ul>
-      <li><code>CREATE</code></li>
-      <li><code>DROP</code></li>
-      <li><code>ALTER</code></li>
-    </ul>
-  </div>
-  <div>
-    <h4>Data Manipulation Language (DML)</h4>
-    <p>Adds and alters data within database objects. The primary purpose is data manipulation.</p>
-    <ul>
-      <li><code>SELECT</code></li>
-      <li><code>INSERT</code></li>
-      <li><code>UPDATE</code></li>
-      <li><code>DELETE</code></li>
-      <li><code>COPY</code></li>
-      <li><code>MERGE</code></li>
-    </ul>
-  </div>
-  <div>
-    <h4>Data Control Language (DCL)</h4>
-    <p>Controls access to database objects or data using commands to grant, deny, or revoke permissions.</p>
-    <ul>
-      <li><code>GRANT</code></li>
-      <li><code>DENY</code></li>
-      <li><code>REVOKE</code></li>
-    </ul>
-  </div>
-  <div>
-    <h4>Transaction Control Language (TCL)</h4>
-    <p>Controls the details of transactions, including commit checkpoints and rollback conditions.</p>
-    <ul>
-      <li><code>COMMIT</code></li>
-      <li><code>ROLLBACK</code></li>
-    </ul>
-  </div>
-</CardGrid>
-
-#### DCL Example
-
-Let's walk through a brief example using DCL commands. A new data scientist named Sarah joins your company, and she needs read-only access to a database called `data_science_db`. You give Sarah access to this database by using the following DCL command:
+Let's walk through a brief example using DCL commands. A new data scientist named Sarah joins your company, and she needs read-only access to a database called `data_science_db`.
 
 ```sql
+-- Grant Sarah read access
 GRANT SELECT ON data_science_db TO user_name Sarah;
 ```
 
-It's a hot job market, and Sarah has worked at the company for only a few months before getting poached by a big tech company. So long, Sarah! Being a security-minded data engineer, you remove Sarah's ability to read from the database:
+It's a hot job market, and Sarah has worked at the company for only a few months before getting poached by a big tech company. Being a security-minded data engineer, you remove Sarah's ability to read from the database:
 
 ```sql
+-- Revoke Sarah's access
 REVOKE SELECT ON data_science_db TO user_name Sarah;
 ```
 
-Access-control requests and issues are common, and understanding DCL will help you resolve problems if you or a team member can't access the data they need, as well as prevent access to data they don't need.
+### 2.2. The Life of a Query
 
-### The Life of a Query
+**In plain English:** When you run a query, it might seem simple—you type some code and get results. But under the hood, the database is doing a lot of work: checking your code for errors, figuring out the most efficient way to execute it, and then actually running it.
 
-How does a query work, and what happens when a query is executed? Let's cover the high-level basics of query execution, using an example of a typical SQL query executing in a database.
+**In technical terms:** Query execution involves parsing and validation, compilation to bytecode, query optimization to determine the execution plan, and finally execution to produce results. The query optimizer plays a critical role in performance.
+
+**Why it matters:** Understanding how queries execute helps you write better queries and diagnose performance problems. The query optimizer's decisions can dramatically impact execution time.
 
 <DiagramContainer title="The Life of a SQL Query">
   <ProcessFlow
+    direction="vertical"
     steps={[
-      { label: 'SQL Code Submitted', color: colors.blue, description: 'User writes and submits query' },
-      { label: 'Parsing & Validation', color: colors.purple, description: 'Check semantics, objects, access' },
-      { label: 'Convert to Bytecode', color: colors.indigo, description: 'Machine-readable format' },
-      { label: 'Query Optimizer', color: colors.violet, description: 'Determine execution plan' },
-      { label: 'Execute Query', color: colors.green, description: 'Run optimized query' },
-      { label: 'Return Results', color: colors.emerald, description: 'Produce output' }
+      {
+        title: "SQL Code Submitted",
+        description: "User writes and submits query",
+        icon: "📝",
+        color: colors.blue
+      },
+      {
+        title: "Parsing & Validation",
+        description: "Check semantics, objects, access",
+        icon: "✅",
+        color: colors.purple
+      },
+      {
+        title: "Convert to Bytecode",
+        description: "Machine-readable format",
+        icon: "🔤",
+        color: colors.indigo
+      },
+      {
+        title: "Query Optimizer",
+        description: "Determine execution plan",
+        icon: "🎯",
+        color: colors.violet
+      },
+      {
+        title: "Execute Query",
+        description: "Run optimized query",
+        icon: "⚡",
+        color: colors.green
+      },
+      {
+        title: "Return Results",
+        description: "Produce output",
+        icon: "📊",
+        color: colors.emerald
+      }
     ]}
   />
 </DiagramContainer>
 
-While running a query might seem simple—write code, run it, and get results—a lot is going on under the hood. When you execute a SQL query, here's a summary of what happens:
-
-1. The database engine compiles the SQL, parsing the code to check for proper semantics and ensuring that the database objects referenced exist and that the current user has the appropriate access to these objects.
-
-2. The SQL code is converted into bytecode. This bytecode expresses the steps that must be executed on the database engine in an efficient, machine-readable format.
-
-3. The database's query optimizer analyzes the bytecode to determine how to execute the query, reordering and refactoring steps to use available resources as efficiently as possible.
-
-4. The query is executed, and results are produced.
-
 #### The Query Optimizer
 
-Queries can have wildly different execution times, depending on how they're executed. A query optimizer's job is to optimize query performance and minimize costs by breaking the query into appropriate steps in an efficient order. The optimizer will assess joins, indexes, data scan size, and other factors. The query optimizer attempts to execute the query in the least expensive manner.
+Queries can have wildly different execution times, depending on how they're executed. A query optimizer's job is to optimize query performance and minimize costs by breaking the query into appropriate steps in an efficient order.
 
-Query optimizers are fundamental to how your query will perform. Every database is different and executes queries in ways that are obviously and subtly different from each other. You won't directly work with a query optimizer, but understanding some of its functionality will help you write more performant queries. You'll need to know how to analyze a query's performance, using things like an explain plan or query analysis, described in the following section.
+The optimizer will assess:
+- Join strategies and ordering
+- Index usage
+- Data scan size
+- Available resources
+- Cost estimates for different execution paths
 
-### Improving Query Performance
+### 2.3. Improving Query Performance
 
-In data engineering, you'll inevitably encounter poorly performing queries. Knowing how to identify and fix these queries is invaluable. Don't fight your database. Learn to work with its strengths and augment its weaknesses. This section shows various ways to improve your query performance.
+**In plain English:** Poorly performing queries are inevitable in data engineering. Learning to identify and fix them is like becoming a performance detective—you need to understand what's slowing things down and know the right techniques to speed them up.
 
-#### Optimize your join strategy and schema
+**In technical terms:** Query optimization involves understanding join strategies, leveraging explain plans, pruning unnecessary data scans, managing commits properly, vacuuming dead records, and utilizing cached results. Each database has unique characteristics that affect optimization strategies.
 
-A single dataset (such as a table or file) is rarely useful on its own; we create value by combining it with other datasets. Joins are one of the most common means of combining datasets and creating new ones. We assume that you're familiar with the significant types of joins (e.g., inner, outer, left, cross) and the types of join relationships (e.g., one to one, one to many, many to one, and many to many).
+**Why it matters:** Bad queries can consume excessive resources, increase costs, slow down systems, and frustrate users. Good query optimization can reduce execution time from hours to seconds while cutting cloud costs dramatically.
 
-Joins are critical in data engineering and are well supported and performant in many databases. Even columnar databases, which in the past had a reputation for slow join performance, now generally offer excellent performance.
+#### Optimize Your Join Strategy and Schema
 
-A common technique for improving query performance is to **prejoin data**. If you find that analytics queries are joining the same data repeatedly, it often makes sense to join the data in advance and have queries read from the prejoined version of the data so that you're not repeating computationally intensive work. This may mean changing the schema and relaxing normalization conditions to widen tables and utilize newer data structures (such as arrays or structs) for replacing frequently joined entity relationships. Another strategy is maintaining a more normalized schema but prejoining tables for the most common analytics and data science use cases.
+Joins are one of the most common means of combining datasets and creating new ones. A common technique for improving query performance is to **prejoin data**.
 
-Next, consider the details and complexity of your join conditions. Complex join logic may consume significant computational resources. We can improve performance for complex joins in a few ways.
-
-Many row-oriented databases allow you to index a result computed from a row. For instance, PostgreSQL allows you to create an index on a string field converted to lowercase; when the optimizer encounters a query where the `lower()` function appears inside a predicate, it can apply the index. You can also create a new derived column for joining, though you will need to train users to join on this column.
+**Prejoining Benefits:**
+- If analytics queries repeatedly join the same data, join it in advance
+- Store prejoined versions so you're not repeating computationally intensive work
+- May involve relaxing normalization to widen tables
+- Can use arrays or structs for frequently joined entity relationships
 
 ##### Row Explosion
 
@@ -189,375 +265,490 @@ Many row-oriented databases allow you to index a result computed from a row. For
 An obscure but frustrating problem is **row explosion**. This occurs when we have a large number of many-to-many matches, either because of repetition in join keys or as a consequence of join logic.
 :::
 
-Suppose the join key in table A has the value `this` repeated five times, and the join key in table B contains this same value repeated 10 times. This leads to a cross-join of these rows: every `this` row from table A paired with every `this` row from table B. This creates 5 × 10 = 50 rows in the output. Now suppose that many other repeats are in the join key. Row explosion often generates enough rows to consume a massive quantity of database resources or even cause a query to fail.
+<DiagramContainer title="Row Explosion Example">
+  <Column gap="md">
+    <Row gap="md">
+      <Box color={colors.blue} variant="outlined" size="sm">
+        Table A: "this" × 5 times
+      </Box>
+      <Box color={colors.purple} variant="outlined" size="sm">
+        Table B: "this" × 10 times
+      </Box>
+    </Row>
+    <Arrow direction="down" label="Cross join" />
+    <Box color={colors.red} variant="filled">
+      Result: 5 × 10 = 50 rows!
+    </Box>
+    <Box color={colors.orange} variant="subtle">
+      Row explosion can consume massive resources or cause queries to fail
+    </Box>
+  </Column>
+</DiagramContainer>
 
-It is also essential to know how your query optimizer handles joins. Some databases can reorder joins and predicates, while others cannot. A row explosion in an early query stage may cause the query to fail, even though a later predicate should correctly remove many of the repeats in the output. Predicate reordering can significantly reduce the computational resources required by a query.
+**Solution:** Use **common table expressions (CTEs)** instead of nested subqueries or temporary tables. CTEs allow users to compose complex queries together in a readable fashion, helping you understand the flow of your query.
 
-Finally, use **common table expressions (CTEs)** instead of nested subqueries or temporary tables. CTEs allow users to compose complex queries together in a readable fashion, helping you understand the flow of your query. The importance of readability for complex queries cannot be understated.
+#### Use the Explain Plan
 
-In many cases, CTEs will also deliver better performance than a script that creates intermediate tables; if you have to create intermediate tables, consider creating temporary tables.
+As you learned in the preceding section, the database's query optimizer influences the execution of a query. The query optimizer's **explain plan** will show you how the query optimizer determined its optimum lowest-cost query.
 
-#### Use the explain plan and understand your query's performance
-
-As you learned in the preceding section, the database's query optimizer influences the execution of a query. The query optimizer's **explain plan** will show you how the query optimizer determined its optimum lowest-cost query, the database objects used (tables, indexes, cache, etc.), and various resource consumption and performance statistics in each query stage. Some databases provide a visual representation of query stages. In contrast, others make the explain plan available via SQL with the `EXPLAIN` command, which displays the sequence of steps the database will take to execute the query.
-
-In addition to using `EXPLAIN` to understand how your query will run, you should monitor your query's performance, viewing metrics on database resource consumption. The following are some areas to monitor:
-
-<CardGrid columns={2}>
-  <div>
-    <h4>Resource Usage</h4>
-    <ul>
-      <li>Disk, memory, and network utilization</li>
-      <li>Data loading time versus processing time</li>
-    </ul>
-  </div>
-  <div>
-    <h4>Query Metrics</h4>
-    <ul>
-      <li>Execution time and record counts</li>
-      <li>Size of data scanned and shuffled</li>
-    </ul>
-  </div>
-  <div>
-    <h4>System Contention</h4>
-    <ul>
-      <li>Competing queries causing resource contention</li>
-      <li>Concurrent connections used vs. available</li>
-    </ul>
-  </div>
-  <div>
-    <h4>Connection Health</h4>
-    <ul>
-      <li>Number of concurrent connections</li>
-      <li>Oversubscribed connections impact</li>
-    </ul>
-  </div>
-</CardGrid>
-
-#### Avoid full table scans
-
-All queries scan data, but not all scans are created equal. As a rule of thumb, you should query only the data you need. When you run `SELECT *` with no predicates, you're scanning the entire table and retrieving every row and column. This is very inefficient performance-wise and expensive, especially if you're using a pay-as-you-go database that charges you either for bytes scanned or compute resources utilized while a query is running.
-
-Whenever possible, use **pruning** to reduce the quantity of data scanned in a query. Columnar and row-oriented databases require different pruning strategies:
-
-<ComparisonTable
-  title="Pruning Strategies by Database Type"
-  items={[
+<CardGrid
+  columns={2}
+  cards={[
     {
-      aspect: 'Column-Oriented (OLAP)',
-      approach: 'Select only needed columns',
-      techniques: 'Use cluster keys, partition tables, optimize for large datasets',
-      examples: 'Snowflake cluster keys, BigQuery partitions'
+      title: "Resource Usage",
+      icon: "💻",
+      color: colors.blue,
+      items: [
+        "Disk, memory, network utilization",
+        "Data loading time vs processing time",
+        "Overall resource consumption"
+      ]
     },
     {
-      aspect: 'Row-Oriented (OLTP)',
-      approach: 'Use table indexes strategically',
-      techniques: 'Create indexes for performance-sensitive queries without overloading',
-      examples: 'B-tree indexes, covering indexes'
+      title: "Query Metrics",
+      icon: "📊",
+      color: colors.purple,
+      items: [
+        "Execution time and record counts",
+        "Size of data scanned and shuffled",
+        "Stage-by-stage breakdowns"
+      ]
+    },
+    {
+      title: "System Contention",
+      icon: "⚠️",
+      color: colors.orange,
+      items: [
+        "Competing queries causing contention",
+        "Concurrent connections used vs available",
+        "Resource conflicts"
+      ]
+    },
+    {
+      title: "Connection Health",
+      icon: "🔌",
+      color: colors.green,
+      items: [
+        "Number of concurrent connections",
+        "Oversubscribed connection impacts",
+        "Connection pool status"
+      ]
     }
   ]}
 />
 
-In a column-oriented database, you should select only the columns you need. Most column-oriented OLAP databases also provide additional tools for optimizing your tables for better query performance. For instance, if you have a very large table (several terabytes in size or greater), Snowflake and BigQuery give you the option to define a cluster key on a table, which orders the table's data in a way that allows queries to more efficiently access portions of very large datasets. BigQuery also allows you to partition a table into smaller segments, allowing you to query only specific partitions instead of the entire table.
+#### Avoid Full Table Scans
 
-In row-oriented databases, pruning usually centers around table indexes. The general strategy is to create table indexes that will improve performance for your most performance-sensitive queries while not overloading the table with so many indexes such that you degrade performance.
+All queries scan data, but not all scans are created equal. As a rule of thumb, you should query only the data you need. When you run `SELECT *` with no predicates, you're scanning the entire table and retrieving every row and column.
 
-#### Know how your database handles commits
+<ComparisonTable
+  beforeTitle="Column-Oriented (OLAP)"
+  afterTitle="Row-Oriented (OLTP)"
+  beforeColor={colors.blue}
+  afterColor={colors.purple}
+  items={[
+    {
+      label: "Pruning Strategy",
+      before: "Select only needed columns",
+      after: "Use table indexes strategically"
+    },
+    {
+      label: "Techniques",
+      before: "Cluster keys, partition tables",
+      after: "B-tree indexes, covering indexes"
+    },
+    {
+      label: "Examples",
+      before: "Snowflake cluster keys, BigQuery partitions",
+      after: "PostgreSQL indexes, MySQL composite keys"
+    },
+    {
+      label: "Best For",
+      before: "Large datasets, analytical queries",
+      after: "Performance-sensitive queries, OLTP"
+    }
+  ]}
+/>
 
-A database commit is a change within a database, such as creating, updating, or deleting a record, table, or other database objects. Many databases support **transactions**—i.e., a notion of committing several operations simultaneously in a way that maintains a consistent state. The purpose of a transaction is to keep a consistent state of a database both while it's active and in the event of a failure. Transactions also handle isolation when multiple concurrent events might be reading, writing, and deleting from the same database objects.
+#### Know How Your Database Handles Commits
 
-You should be intimately familiar with how your database handles commits and transactions, and determine the expected consistency of query results. Does your database handle writes and updates in an ACID-compliant manner? Without ACID compliance, your query might return unexpected results. This could result from a **dirty read**, which happens when a row is read and an uncommitted transaction has altered the row.
+**In plain English:** Different databases handle data changes in different ways. Some lock rows while updating them (making sure nobody else can change them at the same time), while others take snapshots so queries always see consistent data. Understanding this prevents unexpected query results.
 
-Let's briefly consider three databases to understand the impact of commits:
+**In technical terms:** A database commit is a change within a database, such as creating, updating, or deleting a record. Many databases support transactions—a notion of committing several operations simultaneously in a way that maintains a consistent state. Understanding ACID compliance and consistency models is critical.
 
-<CardGrid columns={3}>
-  <div>
-    <h4>PostgreSQL</h4>
-    <p><strong>ACID Transactions</strong></p>
-    <ul>
-      <li>Row locking for consistency</li>
-      <li>Transactions fail or succeed as group</li>
-      <li>Not optimized for large-scale analytics</li>
-    </ul>
-  </div>
-  <div>
-    <h4>Google BigQuery</h4>
-    <p><strong>Point-in-Time Commits</strong></p>
-    <ul>
-      <li>Reads from latest committed snapshot</li>
-      <li>No table locking during reads</li>
-      <li>One write operation at a time</li>
-    </ul>
-  </div>
-  <div>
-    <h4>MongoDB</h4>
-    <p><strong>Variable Consistency</strong></p>
-    <ul>
-      <li>Configurable consistency options</li>
-      <li>Extraordinary scalability</li>
-      <li>May discard writes if overwhelmed</li>
-    </ul>
-  </div>
-</CardGrid>
+**Why it matters:** Without understanding how your database handles commits, your query might return unexpected results from dirty reads, or you might experience performance degradation from inappropriate locking strategies.
 
-First, suppose we're looking at a PostgreSQL RDBMS and applying ACID transactions. Each transaction consists of a package of operations that will either fail or succeed as a group. We can also run analytics queries across many rows; these queries will present a consistent picture of the database at a point in time. The disadvantage of the PostgreSQL approach is that it requires row locking (blocking reads and writes to certain rows), which can degrade performance in various ways. PostgreSQL is not optimized for large scans or the massive amounts of data appropriate for large-scale analytics applications.
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "PostgreSQL",
+      icon: "🐘",
+      color: colors.blue,
+      items: [
+        "ACID-compliant transactions",
+        "Row locking for consistency",
+        "Transactions fail or succeed as group",
+        "Not optimized for large-scale analytics"
+      ]
+    },
+    {
+      title: "Google BigQuery",
+      icon: "☁️",
+      color: colors.green,
+      items: [
+        "Point-in-time commit model",
+        "Reads from latest committed snapshot",
+        "No table locking during reads",
+        "One write operation at a time"
+      ]
+    },
+    {
+      title: "MongoDB",
+      icon: "🍃",
+      color: colors.purple,
+      items: [
+        "Variable consistency database",
+        "Configurable consistency options",
+        "Extraordinary scalability",
+        "May discard writes if overwhelmed"
+      ]
+    }
+  ]}
+/>
 
-Next, consider Google BigQuery. It utilizes a point-in-time full table commit model. When a read query is issued, BigQuery will read from the latest committed snapshot of the table. Whether the query runs for one second or two hours, it will read only from that snapshot and will not see any subsequent changes. BigQuery does not lock the table while reading from it. Instead, subsequent write operations will create new commits and new snapshots while the query continues to run on the snapshot where it started.
+> **Insight**
+>
+> None of these are bad databases. They're all fantastic databases when they are chosen for appropriate applications and configured correctly. Engineers should develop a deep understanding of the problems they're tasked with solving and the technology tools available.
 
-To prevent the inconsistent state, BigQuery allows only one write operation at a time. In this sense, BigQuery provides no write concurrency whatsoever. (In the sense that it can write massive amounts of data in parallel inside a single write query, it is highly concurrent.) If more than one client attempts to write simultaneously, write queries are queued in order of arrival. BigQuery's commit model is similar to the commit models used by Snowflake, Spark, and others.
+#### Vacuum Dead Records
 
-Last, let's consider MongoDB. We refer to MongoDB as a **variable-consistency database**. Engineers have various configurable consistency options, both for the database and at the level of individual queries. MongoDB is celebrated for its extraordinary scalability and write concurrency but is somewhat notorious for issues that arise when engineers abuse it.
+**In plain English:** When you update or delete data, databases often keep the old version around as a reference point. Over time, these "ghost" records pile up and slow things down. Vacuuming is like taking out the trash—it removes these dead records and keeps your database running smoothly.
 
-For instance, in certain modes, MongoDB supports ultra-high write performance. However, this comes at a cost: the database will unceremoniously and silently discard writes if it gets overwhelmed with traffic. This is perfectly suitable for applications that can stand to lose some data—for example, IoT applications where we simply want many measurements but don't care about capturing all measurements. It is not a great fit for applications that need to capture exact data and statistics.
+**In technical terms:** Transactions incur the overhead of creating new records during certain operations while retaining old records as pointers to the last state. Vacuuming removes these dead records, freeing up space, improving query plan accuracy, and enhancing index performance.
 
-:::tip Engineering Wisdom
-None of this is to say these are bad databases. They're all fantastic databases when they are chosen for appropriate applications and configured correctly. The same goes for virtually any database technology.
+**Why it matters:** Dead records cause table bloat, slower queries, and inaccurate query plans. Regular vacuuming maintains database performance and reduces storage costs.
 
-Companies don't hire engineers simply to hack on code in isolation. To be worthy of their title, engineers should develop a deep understanding of the problems they're tasked with solving and the technology tools. This applies to commit and consistency models and every other aspect of technology performance. Appropriate technology choices and configuration can ultimately differentiate extraordinary success and massive failure.
-:::
-
-#### Vacuum dead records
-
-As we just discussed, transactions incur the overhead of creating new records during certain operations, such as updates, deletes, and index operations, while retaining the old records as pointers to the last state of the database. As these old records accumulate in the database filesystem, they eventually no longer need to be referenced. You should remove these dead records in a process called **vacuuming**.
-
-You can vacuum a single table, multiple tables, or all tables in a database. No matter how you choose to vacuum, deleting dead database records is important for a few reasons:
-
-1. It frees up space for new records, leading to less table bloat and faster queries
-2. New and relevant records mean query plans are more accurate
-3. Vacuuming cleans up poor indexes, allowing for better index performance
-
-Vacuum operations are handled differently depending on the type of database:
+**Vacuum Behavior by Database Type:**
 
 - **Object storage-backed databases** (BigQuery, Snowflake, Databricks): Old data retention uses storage space, potentially costing money
-  - Snowflake: Users cannot directly vacuum; control a "time-travel" interval
-  - BigQuery: Fixed seven-day history window
-  - Databricks: Retains data indefinitely until manually vacuumed
+  - **Snowflake**: Users control a "time-travel" interval; cannot directly vacuum
+  - **BigQuery**: Fixed seven-day history window
+  - **Databricks**: Retains data indefinitely until manually vacuumed
 
-- **Amazon Redshift**: VACUUM runs automatically behind the scenes, but users may sometimes want to run it manually for tuning purposes
+- **Amazon Redshift**: VACUUM runs automatically, but users may run it manually for tuning
 
-- **Relational databases** (PostgreSQL, MySQL): Large numbers of transactional operations can cause rapid accumulation of dead records; engineers need to familiarize themselves with vacuuming details
+- **Relational databases** (PostgreSQL, MySQL): Large numbers of transactional operations cause rapid accumulation of dead records
 
-#### Leverage cached query results
+#### Leverage Cached Query Results
 
-Let's say you have an intensive query that you often run on a database that charges you for the amount of data you query. Each time a query is run, this costs you money. Instead of rerunning the same query on the database repeatedly and incurring massive charges, wouldn't it be nice if the results of the query were stored and available for instant retrieval? Thankfully, many cloud OLAP databases cache query results.
+**In plain English:** Imagine if every time someone wanted to know "What were last month's sales?" they had to recalculate it from scratch. That's wasteful! Query caching is like saving the answer so the next person who asks gets it instantly.
+
+**In technical terms:** Many cloud OLAP databases cache query results. When a query is initially run (cold query), it retrieves data from various sources, filters and joins it, and outputs results. Subsequent identical queries return cached results in a fraction of the time, reducing database pressure and cloud costs.
+
+**Why it matters:** Query caching dramatically improves user experience for frequently run queries, reduces compute costs, and decreases load on database resources.
 
 <DiagramContainer title="Query Caching">
-  <Row>
-    <Column>
-      <Box color={colors.red} title="Cold Query">
+  <Row gap="lg">
+    <Column gap="sm" align="center">
+      <Box color={colors.red} icon="❄️" size="lg">Cold Query</Box>
+      <Box color={colors.slate} variant="subtle">
         First execution
-        <br />
-        Retrieves from storage
-        <br />
-        <strong>40 seconds</strong>
       </Box>
+      <Column gap="xs">
+        <Box color={colors.red} variant="outlined" size="sm">Retrieves from storage</Box>
+        <Box color={colors.red} variant="outlined" size="sm">Complex joins and filtering</Box>
+        <Box color={colors.red} variant="outlined" size="sm">40 seconds</Box>
+      </Column>
     </Column>
     <Arrow direction="right" label="Cache results" />
-    <Column>
-      <Box color={colors.green} title="Cached Query">
+    <Column gap="sm" align="center">
+      <Box color={colors.green} icon="⚡" size="lg">Cached Query</Box>
+      <Box color={colors.slate} variant="subtle">
         Subsequent executions
-        <br />
-        Returns from cache
-        <br />
-        <strong>&lt;1 second</strong>
       </Box>
+      <Column gap="xs">
+        <Box color={colors.green} variant="outlined" size="sm">Returns from cache</Box>
+        <Box color={colors.green} variant="outlined" size="sm">No recomputation needed</Box>
+        <Box color={colors.green} variant="outlined" size="sm">&lt; 1 second</Box>
+      </Column>
     </Column>
   </Row>
 </DiagramContainer>
 
-When a query is initially run, it will retrieve data from various sources, filter and join it, and output a result. This initial query—a **cold query**—is similar to the notion of cold data we explored in Chapter 6. For argument's sake, let's say this query took 40 seconds to run. Assuming your database caches query results, rerunning the same query might return results in 1 second or less. The results were cached, and the query didn't need to run cold. Whenever possible, leverage query cache results to reduce pressure on your database and provide a better user experience for frequently run queries.
+### 2.4. Queries on Streaming Data
 
-### Queries on Streaming Data
+**In plain English:** Streaming data is constantly flowing, like a river. Querying streaming data is different from querying a lake of stored data—you need patterns that can work with data that's always moving and arriving in real time.
 
-Streaming data is constantly in flight. As you might imagine, querying streaming data is different from batch data. To fully take advantage of a data stream, we must adapt query patterns that reflect its real-time nature. For example, systems such as Kafka and Pulsar make it easier to query streaming data sources. Let's look at some common ways to do this.
+**In technical terms:** To fully take advantage of a data stream, we must adapt query patterns that reflect its real-time nature. Systems such as Kafka and Pulsar make it easier to query streaming data sources through patterns like fast-follower databases, Kappa architecture, windows, triggers, and stream joins.
 
-#### Basic query patterns on streams
+**Why it matters:** Traditional batch query patterns don't capture the value of streaming data. Streaming query patterns enable real-time analytics, dynamic triggers, and immediate responses to changing data.
 
-Recall continuous CDC, discussed in Chapter 7. CDC, in this form, essentially sets up an analytics database as a fast follower to a production database. One of the longest-standing streaming query patterns simply entails querying the analytics database, retrieving statistical results and aggregations with a slight lag behind the production database.
+#### Basic Query Patterns on Streams
 
-##### The fast-follower approach
+##### The Fast-Follower Approach
 
-How is this a streaming query pattern? Couldn't we accomplish the same thing simply by running our queries on the production database? In principle, yes; in practice, no. Production databases generally aren't equipped to handle production workloads and simultaneously run large analytics scans across significant quantities of data. Running such queries can slow the production application or even cause it to crash.
-
-The basic CDC query pattern allows us to serve real-time analytics with a minimal impact on the production system.
+Recall continuous CDC (Change Data Capture), discussed in Chapter 7. CDC essentially sets up an analytics database as a fast follower to a production database.
 
 <DiagramContainer title="CDC with Fast-Follower Analytics Database">
   <ProcessFlow
+    direction="horizontal"
     steps={[
-      { label: 'Production Database', color: colors.blue, description: 'Handles application workload' },
-      { label: 'CDC Stream', color: colors.purple, description: 'Captures changes' },
-      { label: 'Analytics Database', color: colors.green, description: 'Fast follower for queries' },
-      { label: 'Real-Time Analytics', color: colors.emerald, description: 'Minimal production impact' }
+      {
+        title: "Production Database",
+        description: "Handles application workload",
+        icon: "💾",
+        color: colors.blue
+      },
+      {
+        title: "CDC Stream",
+        description: "Captures changes",
+        icon: "🔄",
+        color: colors.purple
+      },
+      {
+        title: "Analytics Database",
+        description: "Fast follower for queries",
+        icon: "📊",
+        color: colors.green
+      },
+      {
+        title: "Real-Time Analytics",
+        description: "Minimal production impact",
+        icon: "✨",
+        color: colors.emerald
+      }
     ]}
   />
 </DiagramContainer>
 
-The fast-follower pattern can utilize a conventional transactional database as the follower, but there are significant advantages to using a proper OLAP-oriented system. Both Druid and BigQuery combine a streaming buffer with long-term columnar storage in a setup somewhat similar to the Lambda architecture. This works extremely well for computing trailing statistics on vast historical data with near real-time updates.
+**Why this pattern works:**
+- Production databases aren't equipped to handle both production workloads and large analytics scans
+- Running analytics queries on production can slow the application or cause crashes
+- The fast-follower pattern serves real-time analytics with minimal impact on production
 
-The fast-follower CDC approach has critical limitations. It doesn't fundamentally rethink batch query patterns. You're still running SELECT queries against the current table state, and missing the opportunity to dynamically trigger events off changes in the stream.
+**Limitations:**
+- Doesn't fundamentally rethink batch query patterns
+- Still running SELECT queries against current table state
+- Missing opportunity to dynamically trigger events off changes in the stream
 
-##### The Kappa architecture
+##### The Kappa Architecture
 
-Next, recall the Kappa architecture we discussed in Chapter 3. The principal idea of this architecture is to handle all data like events and store these events as a stream rather than a table.
+The principal idea of Kappa architecture is to handle all data like events and store these events as a stream rather than a table.
 
 <DiagramContainer title="Kappa Architecture: Stream-First Approach">
   <StackDiagram
     layers={[
-      { label: 'Applications & IoT Devices', color: colors.blue, description: 'Event sources' },
-      { label: 'Event Streams', color: colors.purple, description: 'Real-time transport' },
-      { label: 'Stream Storage (Kafka/Pulsar)', color: colors.indigo, description: 'Long retention period' },
-      { label: 'Stream Processing & Queries', color: colors.green, description: 'Real-time + historical' }
+      {
+        label: "Event Sources",
+        color: colors.blue,
+        description: "Applications, IoT devices, CDC"
+      },
+      {
+        label: "Stream Processing Platform",
+        color: colors.purple,
+        description: "Kafka, Pulsar with long retention"
+      },
+      {
+        label: "Stream Storage",
+        color: colors.indigo,
+        description: "Retained for months or years"
+      },
+      {
+        label: "Processing Layer",
+        color: colors.green,
+        description: "Real-time and historical queries"
+      }
     ]}
   />
 </DiagramContainer>
 
-When production application databases are the source, Kappa architecture stores events from CDC. Event streams can also flow directly from an application backend, from a swarm of IoT devices, or any system that generates events and can push them over a network. Instead of simply treating a streaming storage system as a buffer, Kappa architecture retains events in storage during a more extended retention period, and data can be directly queried from this storage. The retention period can be pretty long (months or years).
+The "big idea" in Kappa architecture:
+- Treat streaming storage as both real-time transport and historical database
+- Retain events for extended periods (months or years)
+- Query directly from streaming storage or with external tools
+- Support aggregation, statistical calculations, and sessionization
 
-The "big idea" in Kappa architecture is to treat streaming storage as a real-time transport layer and a database for retrieving and querying historical data. This happens either through the direct query capabilities of the streaming storage system or with the help of external tools. For example, Kafka KSQL supports aggregation, statistical calculations, and even sessionization. If query requirements are more complex or data needs to be combined with other data sources, an external tool such as Spark reads a time range of data from Kafka and computes the query results. The streaming storage system can also feed other applications or a stream processor such as Flink or Beam.
+#### Windows, Triggers, and Late-Arriving Data
 
-#### Windows, triggers, emitted statistics, and late-arriving data
+One fundamental limitation of traditional batch queries is that they treat the query engine as an external observer. Most streaming systems support computations triggered directly from the data itself.
 
-One fundamental limitation of traditional batch queries is that this paradigm generally treats the query engine as an external observer. An actor external to the data causes the query to run—perhaps an hourly cron job or a product manager opening a dashboard.
+**Windows** are an essential feature in streaming queries and processing. Windows are small batches that are processed based on dynamic triggers.
 
-Most widely used streaming systems, on the other hand, support the notion of computations triggered directly from the data itself. They might emit mean and median statistics every time a certain number of records are collected in the buffer or output a summary when a user session closes.
-
-**Windows** are an essential feature in streaming queries and processing. Windows are small batches that are processed based on dynamic triggers. Windows are generated dynamically over time in some ways. Let's look at some common types of windows: session, fixed-time, and sliding. We'll also look at watermarks.
-
-##### Session window
-
-A **session window** groups events that occur close together, and filters out periods of inactivity when no events occur. We might say that a user session is any time interval with no inactivity gap of five minutes or more.
+##### Session Window
 
 <DiagramContainer title="Session Window with 5-Minute Inactivity Timeout">
   <Group title="User Activity Timeline">
-    <Box color={colors.blue} title="Session 1">Events clustered together</Box>
-    <Box color={colors.gray} title="5+ min gap">Inactivity</Box>
-    <Box color={colors.purple} title="Session 2">New activity starts</Box>
-    <Box color={colors.gray} title="5+ min gap">Inactivity</Box>
-    <Box color={colors.green} title="Session 3">New activity starts</Box>
-  </Group>
-</DiagramContainer>
-
-In a streaming session, this process can happen dynamically. Note that session windows are per key; in the preceding example, each user gets their own set of windows. The system accumulates data per user. If a five-minute gap with no activity occurs, the system closes the window, sends its calculations, and flushes the data. If new events arrive for the user, the system starts a new session window.
-
-Session windows may also make a provision for late-arriving data. Allowing data to arrive up to five minutes late to account for network conditions and system latency, the system will open the window if a late-arriving event indicates activity less than five minutes after the last event.
-
-Making sessionization dynamic and near real-time fundamentally changes its utility. With retrospective sessionization, we could automate specific actions a day or an hour after a user session closed (e.g., a follow-up email with a coupon for a product viewed by the user). With dynamic sessionization, the user could get an alert in a mobile app that is immediately useful based on their activity in the last 15 minutes.
-
-##### Fixed-time windows
-
-A **fixed-time** (aka tumbling) window features fixed time periods that run on a fixed schedule and processes all data since the previous window is closed.
-
-<DiagramContainer title="Fixed-Time (Tumbling) Windows">
-  <Row>
-    <Box color={colors.blue} title="Window 1">0-20 seconds</Box>
-    <Arrow direction="right" />
-    <Box color={colors.purple} title="Window 2">20-40 seconds</Box>
-    <Arrow direction="right" />
-    <Box color={colors.green} title="Window 3">40-60 seconds</Box>
-  </Row>
-</DiagramContainer>
-
-For example, we might close a window every 20 seconds and process all data arriving from the previous window to give a mean and median statistic. Statistics would be emitted as soon as they could be calculated after the window closed.
-
-This is similar to traditional batch ETL processing, where we might run a data update job every day or every hour. The streaming system allows us to generate windows more frequently and deliver results with lower latency. As we'll repeatedly emphasize, batch is a special case of streaming.
-
-##### Sliding windows
-
-Events in a **sliding window** are bucketed into windows of fixed time length, where separate windows might overlap.
-
-<DiagramContainer title="Sliding Windows">
-  <Group title="60-second windows, sliding every 30 seconds">
-    <Row>
-      <Box color={colors.blue} title="Window 1">0-60 sec</Box>
-      <Box color={colors.purple} title="Window 2">30-90 sec</Box>
-      <Box color={colors.green} title="Window 3">60-120 sec</Box>
+    <Row gap="md">
+      <Box color={colors.blue} icon="🟦">Session 1<br/>Active events</Box>
+      <Box color={colors.gray} variant="outlined" size="sm">5+ min<br/>gap</Box>
+      <Box color={colors.purple} icon="🟪">Session 2<br/>New activity</Box>
+      <Box color={colors.gray} variant="outlined" size="sm">5+ min<br/>gap</Box>
+      <Box color={colors.green} icon="🟩">Session 3<br/>New activity</Box>
     </Row>
   </Group>
 </DiagramContainer>
 
-For example, we could generate a new 60-second window every 30 seconds. Just as we did before, we can emit mean and median statistics.
+**In plain English:** A session window is like tracking how long someone stays on your website. If they're quiet for 5 minutes, you close that session. If they come back later, that's a new session.
 
-The sliding can vary. For example, we might think of the window as truly sliding continuously but emitting statistics only when certain conditions (triggers) are met. Suppose we used a 30-second continuously sliding window but calculated a statistic only when a user clicked a particular banner. This would lead to an extremely high rate of output when many users click the banner, and no calculations during a lull.
+**In technical terms:** A session window groups events that occur close together and filters out periods of inactivity when no events occur. Session windows are per key; each user gets their own set of windows. The system accumulates data per user and closes the window after a specified inactivity gap.
+
+**Why it matters:** Making sessionization dynamic and near real-time fundamentally changes its utility. Instead of follow-up emails a day later, users could get alerts in a mobile app that are immediately useful based on their activity in the last 15 minutes.
+
+##### Fixed-Time (Tumbling) Windows
+
+<DiagramContainer title="Fixed-Time (Tumbling) Windows">
+  <Row gap="md">
+    <Box color={colors.blue} icon="⏰">Window 1<br/>0-20 sec</Box>
+    <Arrow direction="right" />
+    <Box color={colors.purple} icon="⏰">Window 2<br/>20-40 sec</Box>
+    <Arrow direction="right" />
+    <Box color={colors.green} icon="⏰">Window 3<br/>40-60 sec</Box>
+  </Row>
+</DiagramContainer>
+
+**In plain English:** Fixed-time windows are like taking a snapshot every 20 seconds. You process all the data that arrived in that 20-second window, then move to the next one.
+
+**In technical terms:** A fixed-time window features fixed time periods that run on a fixed schedule and processes all data since the previous window closed. This is similar to traditional batch ETL processing, but with shorter intervals and lower latency.
+
+**Why it matters:** As we'll repeatedly emphasize, batch is a special case of streaming. Fixed-time windows allow frequent data updates with lower latency than traditional batch jobs.
+
+##### Sliding Windows
+
+<DiagramContainer title="Sliding Windows">
+  <Group title="60-second windows, sliding every 30 seconds">
+    <Row gap="md">
+      <Box color={colors.blue} icon="📊">Window 1<br/>0-60 sec</Box>
+      <Box color={colors.purple} icon="📊">Window 2<br/>30-90 sec</Box>
+      <Box color={colors.green} icon="📊">Window 3<br/>60-120 sec</Box>
+    </Row>
+    <Box color={colors.orange} variant="subtle" size="sm">
+      Windows overlap - same event can appear in multiple windows
+    </Box>
+  </Group>
+</DiagramContainer>
+
+**In plain English:** Sliding windows are like a moving average—you might calculate the average over 60 seconds, but update it every 30 seconds. Each window overlaps with the previous one.
+
+**In technical terms:** Events in a sliding window are bucketed into windows of fixed time length, where separate windows might overlap. The sliding can vary—windows might emit statistics only when certain conditions (triggers) are met.
+
+**Why it matters:** Sliding windows provide continuous statistics over time with configurable update frequencies, enabling smooth real-time metrics and trend analysis.
 
 ##### Watermarks
-
-We've covered various types of windows and their uses. As discussed in Chapter 7, data is sometimes ingested out of the order from which it originated. A **watermark** is a threshold used by a window to determine whether data in a window is within the established time interval or whether it's considered late.
 
 <DiagramContainer title="Watermark as Threshold for Late-Arriving Data">
   <StackDiagram
     layers={[
-      { label: 'On-Time Data', color: colors.green, description: 'Arrives before watermark' },
-      { label: 'Watermark Threshold', color: colors.yellow, description: 'Time boundary' },
-      { label: 'Late-Arriving Data', color: colors.orange, description: 'Arrives after watermark' }
+      {
+        label: "On-Time Data",
+        color: colors.green,
+        description: "Arrives before watermark threshold"
+      },
+      {
+        label: "Watermark Threshold",
+        color: colors.yellow,
+        description: "Time boundary for window processing"
+      },
+      {
+        label: "Late-Arriving Data",
+        color: colors.orange,
+        description: "Arrives after watermark - may be dropped or handled specially"
+      }
     ]}
   />
 </DiagramContainer>
 
-If data arrives that is new to the window but older than the timestamp of the watermark, it is considered to be late-arriving data.
+**In plain English:** A watermark is like a deadline for a window. Data that arrives after the deadline is considered "late." You get to decide what to do with late data—ignore it, reopen the window, or handle it separately.
 
-#### Combining streams with other data
+**In technical terms:** A watermark is a threshold used by a window to determine whether data in a window is within the established time interval or whether it's considered late. If data arrives that is new to the window but older than the timestamp of the watermark, it is considered late-arriving data.
 
-As we've mentioned before, we often derive value from data by combining it with other data. Streaming data is no different. For instance, multiple streams can be combined, or a stream can be combined with batch historical data.
+**Why it matters:** Network delays and system latency mean events don't always arrive in order. Watermarks provide a mechanism to handle late data gracefully while still producing timely results.
 
-##### Conventional table joins
+#### Combining Streams with Other Data
 
-Some tables may be fed by streams. The most basic approach to this problem is simply joining these two tables in a database. A stream can feed one or both of these tables.
+As we've mentioned before, we often derive value from data by combining it with other data. Streaming data is no different.
+
+##### Conventional Table Joins
 
 <DiagramContainer title="Joining Tables Fed by Streams">
-  <Row>
-    <Box color={colors.blue} title="Stream 1">Feeds Table A</Box>
-    <Box color={colors.purple} title="Stream 2">Feeds Table B</Box>
-  </Row>
-  <Arrow direction="down" label="Join" />
-  <Box color={colors.green} title="Joined Result">Combined query results</Box>
+  <Column gap="md">
+    <Row gap="md">
+      <Box color={colors.blue} icon="🌊">Stream 1<br/>Feeds Table A</Box>
+      <Box color={colors.purple} icon="🌊">Stream 2<br/>Feeds Table B</Box>
+    </Row>
+    <Arrow direction="down" label="Join in database" />
+    <Box color={colors.green} icon="📊" size="lg">
+      Joined Result Table
+    </Box>
+  </Column>
 </DiagramContainer>
+
+The most basic approach is simply joining tables that are fed by streams. A stream can feed one or both of these tables, and you join them like any other tables in a database.
 
 ##### Enrichment
 
-**Enrichment** means that we join a stream to other data. Typically, this is done to provide enhanced data into another stream.
-
 <DiagramContainer title="Stream Enrichment Pattern">
   <ProcessFlow
+    direction="horizontal"
     steps={[
-      { label: 'Event Stream', color: colors.blue, description: 'Product & User IDs' },
-      { label: 'Lookup Enrichment', color: colors.purple, description: 'Add details from cache/DB' },
-      { label: 'Enriched Stream', color: colors.green, description: 'Enhanced events' }
+      {
+        title: "Event Stream",
+        description: "Product & User IDs only",
+        icon: "🌊",
+        color: colors.blue
+      },
+      {
+        title: "Lookup Enrichment",
+        description: "Add details from cache/DB",
+        icon: "🔍",
+        color: colors.purple
+      },
+      {
+        title: "Enriched Stream",
+        description: "Complete event data",
+        icon: "✨",
+        color: colors.green
+      }
     ]}
   />
 </DiagramContainer>
 
-For example, suppose that an online retailer receives an event stream from a partner business containing product and user IDs. The retailer wishes to enhance these events with product details and demographic information on the users. The retailer feeds these events to a serverless function that looks up the product and user in an in-memory database (say, a cache), adds the required information to the event, and outputs the enhanced events to another stream.
+**In plain English:** Enrichment is like adding context to a telegram. You receive a message that says "Product 123, User 456" and you look up what Product 123 is and who User 456 is, then pass along a complete message with all the details.
 
-In practice, the enrichment source could originate almost anywhere—a table in a cloud data warehouse or RDBMS, or a file in object storage. It's simply a question of reading from the source and storing the requisite enrichment data in an appropriate place for retrieval by the stream.
+**In technical terms:** Enrichment means joining a stream to other data, typically to provide enhanced data into another stream. For example, a serverless function looks up additional information in an in-memory database, adds it to the event, and outputs enhanced events to another stream.
 
-##### Stream-to-stream joining
+**Why it matters:** Raw events often contain only IDs and minimal data. Enrichment adds the context needed for analysis—product names, user demographics, category information—making the stream immediately useful for downstream consumers.
 
-Increasingly, streaming systems support direct stream-to-stream joining. Suppose that an online retailer wishes to join its web event data with streaming data from an ad platform. The company can feed both streams into Spark, but a variety of complications arise. For instance, the streams may have significantly different latencies for arrival at the point where the join is handled in the streaming system. The ad platform may provide its data with a five-minute delay. In addition, certain events may be significantly delayed—for example, a session close event for a user, or an event that happens on the phone offline and shows up in the stream only after the user is back in mobile network range.
+##### Stream-to-Stream Joining
 
 <DiagramContainer title="Stream-to-Stream Join Architecture">
-  <Row>
-    <Column>
-      <Box color={colors.blue} title="Stream 1">Web events</Box>
-      <Box color={colors.lightBlue} title="Buffer 1">Retention window</Box>
-    </Column>
-    <Column>
-      <Box color={colors.purple} title="Stream 2">Ad platform events</Box>
-      <Box color={colors.lightPurple} title="Buffer 2">Retention window</Box>
-    </Column>
-  </Row>
-  <Arrow direction="down" label="Join on key" />
-  <Box color={colors.green} title="Joined Stream">Matched events within retention</Box>
+  <Column gap="md">
+    <Row gap="lg">
+      <Column gap="sm" align="center">
+        <Box color={colors.blue} icon="🌊">Stream 1<br/>Web events</Box>
+        <Box color={colors.blue} variant="outlined" size="sm">Buffer 1<br/>Retention window</Box>
+      </Column>
+      <Column gap="sm" align="center">
+        <Box color={colors.purple} icon="🌊">Stream 2<br/>Ad platform events</Box>
+        <Box color={colors.purple} variant="outlined" size="sm">Buffer 2<br/>Retention window</Box>
+      </Column>
+    </Row>
+    <Arrow direction="down" label="Join on key within retention" />
+    <Box color={colors.green} icon="✅" size="lg">
+      Joined Stream (Matched Events)
+    </Box>
+  </Column>
 </DiagramContainer>
 
-As such, typical streaming join architectures rely on streaming buffers. The buffer retention interval is configurable; a longer retention interval requires more storage and other resources. Events get joined with data in the buffer and are eventually evicted after the retention interval has passed.
+**In plain English:** Joining two streams is tricky because data from each stream might arrive at different times. It's like trying to match up pairs of socks from two laundry loads—you need to hold onto socks for a while to find their matches.
 
-Now that we've covered how queries work for batch and streaming data, let's discuss making your data useful by modeling it.
+**In technical terms:** Streaming systems support direct stream-to-stream joining using streaming buffers. The buffer retention interval is configurable; a longer retention interval requires more storage and resources. Events get joined with data in the buffer and are eventually evicted after the retention interval has passed.
 
-## Data Modeling
+**Why it matters:** Stream-to-stream joins enable real-time correlation of events from multiple sources—for example, matching web events with ad platform data to calculate immediate ROI, or correlating IoT sensor data with weather events.
 
-Data modeling is something that we see overlooked disturbingly often. We often see data teams jump into building data systems without a game plan to organize their data in a way that's useful for the business. This is a mistake. Well-constructed data architectures must reflect the goals and business logic of the organization that relies on this data. Data modeling involves deliberately choosing a coherent structure for data and is a critical step to make data useful for the business.
+---
 
-:::tip Three-Part Explanation
+## 3. Data Modeling
 
 **In plain English:** Data modeling is like creating a blueprint for your organization's information. Just as an architect designs a building's structure before construction begins, data modeling defines how data should be organized to match how your business actually works.
 
@@ -565,126 +756,194 @@ Data modeling is something that we see overlooked disturbingly often. We often s
 
 **Why it matters:** Without data modeling, you end up with a data swamp—inconsistent definitions, redundant data, and queries that produce different answers to the same question. Good data modeling ensures everyone in your organization is working from the same source of truth.
 
-:::
+> **Insight**
+>
+> Data modeling has been a practice for decades. As pendulums in technology often go, data modeling became somewhat unfashionable in the early to mid-2010s with the rise of data lakes and NoSQL. Nowadays, the pendulum seems to be swinging back toward data modeling as organizations recognize it's critical for realizing value from data.
 
-Data modeling has been a practice for decades in one form or another. For example, various types of normalization techniques have been used to model data since the early days of RDBMSs; data warehousing modeling techniques have been around since at least the early 1990s and arguably longer. As pendulums in technology often go, data modeling became somewhat unfashionable in the early to mid-2010s. The rise of data lake 1.0, NoSQL, and big data systems allowed engineers to bypass traditional data modeling, sometimes for legitimate performance gains. Other times, the lack of rigorous data modeling created data swamps, along with lots of redundant, mismatched, or simply wrong data.
+### 3.1. What Is a Data Model?
 
-Nowadays, the pendulum seems to be swinging back toward data modeling. The growing popularity of data management (in particular, data governance and data quality) is pushing the need for coherent business logic. The meteoric rise of data's prominence in companies creates a growing recognition that modeling is critical for realizing value at the higher levels of the Data Science Hierarchy of Needs pyramid. That said, we believe that new paradigms are required to truly embrace the needs of streaming data and ML.
+A data model represents the way data relates to the real world. It reflects how the data must be structured and standardized to best reflect your organization's processes, definitions, workflows, and logic.
 
-### What Is a Data Model?
+**A good data model:**
+- Captures how communication and work naturally flow within your organization
+- Contains consistent definitions across the company
+- Correlates with impactful business decisions
+- Translates business logic into the data layer
 
-A data model represents the way data relates to the real world. It reflects how the data must be structured and standardized to best reflect your organization's processes, definitions, workflows, and logic. A good data model captures how communication and work naturally flow within your organization. In contrast, a poor data model (or nonexistent one) is haphazard, confusing, and incoherent.
+**A poor data model (or nonexistent one):**
+- Is haphazard, confusing, and incoherent
+- Has inconsistent definitions across departments
+- Leads to downstream errors and misinterpretation
+- Creates data swamps with redundant, mismatched, or wrong data
 
-Some data professionals view data modeling as tedious and reserved for "big enterprises." Like most good hygiene practices—such as flossing your teeth and getting a good night's sleep—data modeling is acknowledged as a good thing to do but is often ignored in practice. Ideally, every organization should model its data if only to ensure that business logic and rules are translated at the data layer.
+#### Example: Defining "Customer"
 
-When modeling data, it's critical to focus on translating the model to business outcomes. A good data model should correlate with impactful business decisions. For example, a **customer** might mean different things to different departments in a company. Is someone who's bought from you over the last 30 days a customer? What if they haven't bought from you in the previous six months or a year? Carefully defining and modeling this customer data can have a massive impact on downstream reports on customer behavior or the creation of customer churn models whereby the time since the last purchase is a critical variable.
+For example, a **customer** might mean different things to different departments in a company:
+- Is someone who's bought from you over the last 30 days a customer?
+- What if they haven't bought from you in the previous six months or a year?
+- Does browsing without purchasing make someone a customer?
 
-:::tip Data Modeling Best Practice
-A good data model contains consistent definitions. In practice, definitions are often messy throughout a company. Can you think of concepts or terms in your company that might mean different things to different people?
-:::
+Carefully defining and modeling this customer data can have a massive impact on downstream reports on customer behavior or the creation of customer churn models.
 
-Our discussion focuses mainly on batch data modeling since that's where most data modeling techniques arose. We will also look at some approaches to modeling streaming data and general considerations for modeling.
+> **Insight**
+>
+> A good data model contains consistent definitions. In practice, definitions are often messy throughout a company. Can you think of concepts or terms in your company that might mean different things to different people?
 
-### Conceptual, Logical, and Physical Data Models
+### 3.2. Conceptual, Logical, and Physical Data Models
 
-When modeling data, the idea is to move from abstract modeling concepts to concrete implementation. Along this continuum, three main data models are conceptual, logical, and physical. These models form the basis for the various modeling techniques we describe in this chapter:
+When modeling data, the idea is to move from abstract modeling concepts to concrete implementation. Along this continuum, three main data models exist:
 
 <DiagramContainer title="The Data Modeling Continuum">
   <ProcessFlow
+    direction="horizontal"
     steps={[
       {
-        label: 'Conceptual Model',
-        color: colors.blue,
-        description: 'Business logic, schemas, ER diagrams'
+        title: "Conceptual Model",
+        description: "Business logic, schemas, ER diagrams",
+        icon: "💡",
+        color: colors.blue
       },
       {
-        label: 'Logical Model',
-        color: colors.purple,
-        description: 'Data types, keys, relationships'
+        title: "Logical Model",
+        description: "Data types, keys, relationships",
+        icon: "🏗️",
+        color: colors.purple
       },
       {
-        label: 'Physical Model',
-        color: colors.green,
-        description: 'Specific databases, tables, configuration'
+        title: "Physical Model",
+        description: "Specific databases, tables, configuration",
+        icon: "⚙️",
+        color: colors.green
       }
     ]}
   />
 </DiagramContainer>
 
-**Conceptual**
-Contains business logic and rules and describes the system's data, such as schemas, tables, and fields (names and types). When creating a conceptual model, it's often helpful to visualize it in an entity-relationship (ER) diagram, which is a standard tool for visualizing the relationships among various entities in your data (orders, customers, products, etc.). For example, an ER diagram might encode the connections among customer ID, customer name, customer address, and customer orders. Visualizing entity relationships is highly recommended for designing a coherent conceptual data model.
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Conceptual",
+      icon: "💡",
+      color: colors.blue,
+      items: [
+        "Contains business logic and rules",
+        "Describes system's data (schemas, tables, fields)",
+        "Entity-relationship (ER) diagrams",
+        "Visualizes relationships among entities"
+      ]
+    },
+    {
+      title: "Logical",
+      icon: "🏗️",
+      color: colors.purple,
+      items: [
+        "Details how conceptual model is implemented",
+        "Adds data types and constraints",
+        "Maps out primary and foreign keys",
+        "More technical than conceptual"
+      ]
+    },
+    {
+      title: "Physical",
+      icon: "⚙️",
+      color: colors.green,
+      items: [
+        "Defines implementation in database system",
+        "Specific databases, schemas, tables",
+        "Configuration details included",
+        "Ready for deployment"
+      ]
+    }
+  ]}
+/>
 
-**Logical**
-Details how the conceptual model will be implemented in practice by adding significantly more detail. For example, we would add information on the types of customer ID, customer names, and custom addresses. In addition, we would map out primary and foreign keys.
+**Successful data modeling involves business stakeholders at the inception of the process.** Engineers need to obtain definitions and business goals for the data. Modeling data should be a full-contact sport whose goal is to provide the business with quality data for actionable insights and intelligent automation.
 
-**Physical**
-Defines how the logical model will be implemented in a database system. We would add specific databases, schemas, and tables to our logical model, including configuration details.
-
-Successful data modeling involves business stakeholders at the inception of the process. Engineers need to obtain definitions and business goals for the data. Modeling data should be a full-contact sport whose goal is to provide the business with quality data for actionable insights and intelligent automation. This is a practice that everyone must continuously participate in.
+#### The Grain of the Data
 
 Another important consideration for data modeling is the **grain** of the data, which is the resolution at which data is stored and queried. The grain is typically at the level of a primary key in a table, such as customer ID, order ID, and product ID; it's often accompanied by a date or timestamp for increased fidelity.
-
-For example, suppose that a company has just begun to deploy BI reporting. The company is small enough that the same person is filling the role of data engineer and analyst. A request comes in for a report that summarizes daily customer orders. Specifically, the report should list all customers who ordered, the number of orders they placed that day, and the total amount they spent.
-
-This report is inherently coarse-grained. It contains no details on spending per order or the items in each order. It is tempting for the data engineer/analyst to ingest data from the production orders database and boil it down to a reporting table with only the basic aggregated data required for the report. However, this would entail starting over when a request comes in for a report with finer-grained data aggregation.
-
-Since the data engineer is actually quite experienced, they elect to create tables with detailed data on customer orders, including each order, item, item cost, item IDs, etc. Essentially, their tables contain all details on customer orders. The data's grain is at the customer-order level. This customer-order data can be analyzed as is, or aggregated for summary statistics on customer order activity.
 
 :::tip Best Practice: Model at the Lowest Grain
 In general, you should strive to model your data at the lowest level of grain possible. From here, it's easy to aggregate this highly granular dataset. The reverse isn't true, and it's generally impossible to restore details that have been aggregated away.
 :::
 
-### Normalization
+### 3.3. Normalization
 
-**Normalization** is a database data modeling practice that enforces strict control over the relationships of tables and columns within a database. The goal of normalization is to remove the redundancy of data within a database and ensure referential integrity. Basically, it's don't repeat yourself (DRY) applied to data in a database.
+**In plain English:** Normalization is like organizing your closet using the principle "everything has a place, and there's no duplicates." Instead of keeping the same shirt in three different drawers, you keep one shirt in one place and reference it when needed.
 
-Normalization is typically applied to relational databases containing tables with rows and columns. It was first introduced by relational database pioneer Edgar Codd in the early 1970s.
+**In technical terms:** Normalization is a database data modeling practice that enforces strict control over the relationships of tables and columns within a database. The goal is to remove data redundancy and ensure referential integrity—basically, DRY (Don't Repeat Yourself) applied to data.
+
+**Why it matters:** Normalization prevents data inconsistencies, reduces storage requirements, and ensures updates happen in one place. However, highly normalized data may require more joins, so the degree of normalization depends on your use case.
 
 Codd outlined four main objectives of normalization:
-
 1. To free the collection of relations from undesirable insertion, update, and deletion dependencies
-2. To reduce the need for restructuring the collection of relations, as new types of data are introduced, and thus increase the lifespan of application programs
+2. To reduce the need for restructuring as new types of data are introduced
 3. To make the relational model more informative to users
-4. To make the collection of relations neutral to the query statistics, where these statistics are liable to change as time goes by
+4. To make the collection of relations neutral to query statistics
 
-Codd introduced the idea of **normal forms**. The normal forms are sequential, with each form incorporating the conditions of prior forms. We describe Codd's first three normal forms here:
+#### Normal Forms
 
-<CardGrid columns={2}>
-  <div>
-    <h4>Denormalized</h4>
-    <p>No normalization. Nested and redundant data is allowed.</p>
-  </div>
-  <div>
-    <h4>First Normal Form (1NF)</h4>
-    <p>Each column is unique and has a single value. The table has a unique primary key.</p>
-  </div>
-  <div>
-    <h4>Second Normal Form (2NF)</h4>
-    <p>The requirements of 1NF, plus partial dependencies are removed.</p>
-  </div>
-  <div>
-    <h4>Third Normal Form (3NF)</h4>
-    <p>The requirements of 2NF, plus each table contains only relevant fields related to its primary key and has no transitive dependencies.</p>
-  </div>
-</CardGrid>
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Denormalized",
+      icon: "📦",
+      color: colors.red,
+      items: [
+        "No normalization applied",
+        "Nested and redundant data allowed",
+        "Simple but error-prone"
+      ]
+    },
+    {
+      title: "First Normal Form (1NF)",
+      icon: "1️⃣",
+      color: colors.blue,
+      items: [
+        "Each column is unique and has single value",
+        "No repeating groups",
+        "Table has unique primary key"
+      ]
+    },
+    {
+      title: "Second Normal Form (2NF)",
+      icon: "2️⃣",
+      color: colors.purple,
+      items: [
+        "Requirements of 1NF",
+        "Plus partial dependencies removed",
+        "Non-key columns depend on entire key"
+      ]
+    },
+    {
+      title: "Third Normal Form (3NF)",
+      icon: "3️⃣",
+      color: colors.green,
+      items: [
+        "Requirements of 2NF",
+        "Plus no transitive dependencies",
+        "Each table contains only relevant fields"
+      ]
+    }
+  ]}
+/>
 
-It's worth spending a moment to unpack a couple of terms:
-
+**Key Terms:**
 - **Unique primary key**: A single field or set of multiple fields that uniquely determines rows in the table
 - **Partial dependency**: When a subset of fields in a composite key can determine a nonkey column
 - **Transitive dependency**: When a nonkey field depends on another nonkey field
 
 #### Normalization Example: Ecommerce Orders
 
-Let's look at stages of normalization—from denormalized to 3NF—using an ecommerce example of customer orders.
+Let's look at stages of normalization—from denormalized to 3NF—using an ecommerce example.
 
 **Denormalized Table (OrderDetail)**
 
 | OrderID | OrderItems | CustomerID | CustomerName | OrderDate |
 |---------|------------|------------|--------------|-----------|
 | 100 | `[{"sku": 1, "price": 50, "quantity": 1, "name": "Thingamajig"}, {"sku": 2, "price": 25, "quantity": 2, "name": "Whatchamacallit"}]` | 5 | Joe Reis | 2022-03-01 |
-
-This denormalized OrderDetail table contains five fields. The primary key is OrderID. Notice that the OrderItems field contains a nested object with two SKUs along with their price, quantity, and name.
 
 **Moving to 1NF: Remove Nested Data**
 
@@ -693,11 +952,9 @@ This denormalized OrderDetail table contains five fields. The primary key is Ord
 | 100 | 1 | 50 | 1 | Thingamajig | 5 | Joe Reis | 2022-03-01 |
 | 100 | 2 | 25 | 2 | Whatchamacallit | 5 | Joe Reis | 2022-03-01 |
 
-Now we have an OrderDetail table in which fields do not contain repeats or nested data. The problem is that now we don't have a unique primary key—100 occurs in the OrderID column in two different rows.
+Now we have no nested data, but we don't have a unique primary key—100 occurs twice.
 
 **Creating a Unique Primary Key**
-
-Let's add a LineItemNumber column to create a composite key:
 
 | OrderID | LineItemNumber | Sku | Price | Quantity | ProductName | CustomerID | CustomerName | OrderDate |
 |---------|----------------|-----|-------|----------|-------------|------------|--------------|-----------|
@@ -710,7 +967,7 @@ The composite key (OrderID, LineItemNumber) is now a unique primary key.
 
 **Moving to 2NF: Remove Partial Dependencies**
 
-To reach 2NF, we need to ensure that no partial dependencies exist. The last three columns are determined by order number. Let's split OrderDetail into two tables:
+To reach 2NF, we split into two tables:
 
 **Orders Table**
 
@@ -731,7 +988,7 @@ To reach 2NF, we need to ensure that no partial dependencies exist. The last thr
 
 **Moving to 3NF: Remove Transitive Dependencies**
 
-Notice that Sku determines ProductName in OrderLineItem. That is, Sku depends on the composite key, and ProductName depends on Sku. This is a transitive dependency. Let's break OrderLineItem into OrderLineItem and Skus:
+Notice that Sku determines ProductName in OrderLineItem. That's a transitive dependency. Let's break it into two tables:
 
 **OrderLineItem Table (3NF)**
 
@@ -750,119 +1007,138 @@ Notice that Sku determines ProductName in OrderLineItem. That is, Sku depends on
 | 2 | Whatchamacallit |
 | 3 | Whozeewhatzit |
 
-Now, both OrderLineItem and Skus are in 3NF. Notice that Orders does not satisfy 3NF—what transitive dependencies are present? How would you fix this?
-
-Additional normal forms exist (up to 6NF in the Boyce-Codd system), but these are much less common than the first three. A database is usually considered normalized if it's in third normal form.
+Now both OrderLineItem and Skus are in 3NF!
 
 :::tip Practical Advice
-The degree of normalization that you should apply to your data depends on your use case. No one-size-fits-all solution exists, especially in databases where some denormalization presents performance advantages. Although denormalization may seem like an antipattern, it's common in many OLAP systems that store semistructured data. Study normalization conventions and database best practices to choose an appropriate strategy.
+The degree of normalization that you should apply to your data depends on your use case. No one-size-fits-all solution exists, especially in databases where some denormalization presents performance advantages. Study normalization conventions and database best practices to choose an appropriate strategy.
 :::
 
-### Techniques for Modeling Batch Analytical Data
+### 3.4. Techniques for Modeling Batch Analytical Data
 
-When describing data modeling for data lakes or data warehouses, you should assume that the raw data takes many forms (e.g., structured and semistructured), but the output is a structured data model of rows and columns. However, several approaches to data modeling can be used in these environments. The big approaches you'll likely encounter are Kimball, Inmon, and Data Vault.
-
-In practice, some of these techniques can be combined. For example, we see some data teams start with Data Vault and then add a Kimball star schema alongside it. We'll also look at wide and denormalized data models and other batch data-modeling techniques you should have in your arsenal.
+When describing data modeling for data lakes or data warehouses, you should assume that the raw data takes many forms, but the output is a structured data model of rows and columns. The big approaches you'll likely encounter are **Kimball**, **Inmon**, and **Data Vault**.
 
 :::info Note
-Our coverage of the first three approaches—Inmon, Kimball, and Data Vault—is cursory and hardly does justice to their respective complexity and nuance. At the end of this chapter, we list the canonical books from their creators. For a data engineer, these books are must-reads, and we highly encourage you to read them, if only to understand how and why data modeling is central to batch analytical data.
+Our coverage of these approaches is cursory and hardly does justice to their complexity and nuance. These books are must-reads for data engineers to understand how and why data modeling is central to batch analytical data.
 :::
 
 #### Inmon
 
-The father of the data warehouse, Bill Inmon, created his approach to data modeling in 1989. Before the data warehouse, the analysis would often occur directly on the source system itself, with the obvious consequence of bogging down production transactional databases with long-running queries. The goal of the data warehouse was to separate the source system from the analytical system.
+**In plain English:** Bill Inmon's approach is like building a central library for all your company's information. You bring data from every department, organize it meticulously in a highly structured way (3NF), and then create specialized reading rooms (data marts) for different departments to use.
 
-Inmon defines a data warehouse the following way:
+**In technical terms:** The father of the data warehouse, Bill Inmon, created his approach in 1989. Data is integrated from across the organization in a granular, highly normalized ER model (3NF), with a relentless emphasis on ETL. The data warehouse represents a "single source of truth," which supports the overall business's information requirements.
 
-> A data warehouse is a subject-oriented, integrated, nonvolatile, and time-variant collection of data in support of management's decisions. The data warehouse contains granular corporate data. Data in the data warehouse is able to be used for many different purposes, including sitting and waiting for future requirements which are unknown today.
+**Why it matters:** Inmon's approach ensures minimal data duplication, leading to fewer downstream analytical errors because data won't diverge or suffer from redundancies. However, it requires significant upfront modeling and ETL work.
 
-The four critical parts of a data warehouse can be described as follows:
+Inmon defines a data warehouse as:
 
-<CardGrid columns={2}>
-  <div>
-    <h4>Subject-Oriented</h4>
-    <p>The data warehouse focuses on a specific subject area, such as sales or marketing.</p>
-  </div>
-  <div>
-    <h4>Integrated</h4>
-    <p>Data from disparate sources is consolidated and normalized.</p>
-  </div>
-  <div>
-    <h4>Nonvolatile</h4>
-    <p>Data remains unchanged after data is stored in a data warehouse.</p>
-  </div>
-  <div>
-    <h4>Time-Variant</h4>
-    <p>Varying time ranges can be queried.</p>
-  </div>
-</CardGrid>
+> A subject-oriented, integrated, nonvolatile, and time-variant collection of data in support of management's decisions.
 
-Let's look at each of these parts to understand its influence on an Inmon data model. First, the logical model must focus on a specific area. For instance, if the subject orientation is "sales," then the logical model contains all details related to sales—business keys, relationships, attributes, etc. Next, these details are integrated into a consolidated and highly normalized data model. Finally, the data is stored unchanged in a nonvolatile and time-variant way, meaning you can (theoretically) query the original data for as long as storage history allows.
-
-Here is another key characteristic of Inmon's data warehouse:
-
-> The second salient characteristic of the data warehouse is that it is integrated. Of all the aspects of a data warehouse, integration is the most important. Data is fed from multiple, disparate sources into the data warehouse. As the data is fed, it is converted, reformatted, resequenced, summarized, etc. The result is that data—once it resides in the data warehouse—has a single physical corporate image.
-
-With Inmon's data warehouse, data is integrated from across the organization in a granular, highly normalized ER model, with a relentless emphasis on ETL. Because of the subject-oriented nature of the data warehouse, the Inmon data warehouse consists of key source databases and information systems used in an organization. Data from key business source systems is ingested and integrated into a highly normalized (3NF) data warehouse that often closely resembles the normalization structure of the source system itself.
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Subject-Oriented",
+      icon: "🎯",
+      color: colors.blue,
+      items: [
+        "Focuses on specific subject area",
+        "Examples: sales, marketing, finance",
+        "Contains all details for that subject",
+        "Business keys, relationships, attributes"
+      ]
+    },
+    {
+      title: "Integrated",
+      icon: "🔗",
+      color: colors.purple,
+      items: [
+        "Data from disparate sources consolidated",
+        "Converted, reformatted, resequenced",
+        "Single physical corporate image",
+        "Most important characteristic"
+      ]
+    },
+    {
+      title: "Nonvolatile",
+      icon: "🔒",
+      color: colors.green,
+      items: [
+        "Data remains unchanged after storage",
+        "Historical records preserved",
+        "No updates to existing data",
+        "Append-only architecture"
+      ]
+    },
+    {
+      title: "Time-Variant",
+      icon: "⏰",
+      color: colors.orange,
+      items: [
+        "Varying time ranges can be queried",
+        "Historical analysis supported",
+        "Query original data over time",
+        "Temporal dimensions included"
+      ]
+    }
+  ]}
+/>
 
 <DiagramContainer title="Inmon Ecommerce Data Warehouse Architecture">
   <StackDiagram
     layers={[
       {
-        label: 'Source Systems',
+        label: "Source Systems",
         color: colors.blue,
-        description: 'Orders, Inventory, Marketing'
+        description: "Orders, Inventory, Marketing"
       },
       {
-        label: 'ETL Layer',
+        label: "ETL Layer",
         color: colors.purple,
-        description: 'Extract, Transform, Load'
+        description: "Extract, Transform, Load to 3NF"
       },
       {
-        label: 'Data Warehouse (3NF)',
+        label: "Data Warehouse (3NF)",
         color: colors.indigo,
-        description: 'Highly normalized, single source of truth'
+        description: "Highly normalized, single source of truth"
       },
       {
-        label: 'Data Marts',
+        label: "Data Marts",
         color: colors.green,
-        description: 'Sales, Marketing, Purchasing (Star Schemas)'
+        description: "Sales, Marketing, Purchasing (Star Schemas)"
       }
     ]}
   />
 </DiagramContainer>
 
-The strict normalization requirement ensures as little data duplication as possible, which leads to fewer downstream analytical errors because data won't diverge or suffer from redundancies. The data warehouse represents a "single source of truth," which supports the overall business's information requirements. The data is presented for downstream reports and analysis via business and department-specific data marts, which may also be denormalized.
-
-A popular option for modeling data in a data mart is a star schema (discussed in the following section on Kimball), though any data model that provides easily accessible information is also suitable. In the preceding example, sales, marketing, and purchasing have their own star schema, fed upstream from the granular data in the data warehouse. This allows each department to have its own data structure that's unique and optimized to its specific needs.
-
 #### Kimball
 
-If there are spectrums to data modeling, Kimball is very much on the opposite end of Inmon. Created by Ralph Kimball in the early 1990s, this approach to data modeling focuses less on normalization, and in some cases accepting denormalization. As Inmon says about the difference between the data warehouse and data mart, "A data mart is never a substitute for a data warehouse."
+**In plain English:** If Inmon's approach is top-down (build the central library first), Kimball's is bottom-up (build reading rooms first). Kimball focuses on delivering department-specific analytics quickly using star schemas with fact and dimension tables, accepting some denormalization for performance.
 
-Whereas Inmon integrates data from across the business in the data warehouse, and serves department-specific analytics via data marts, the Kimball model is bottom-up, encouraging you to model and serve department or business analytics in the data warehouse itself. The Kimball approach effectively makes the data mart the data warehouse itself. This may enable faster iteration and modeling than Inmon, with the trade-off of potential looser data integration, data redundancy, and duplication.
+**In technical terms:** Created by Ralph Kimball in the early 1990s, this approach focuses less on normalization and in some cases accepts denormalization. The Kimball model is bottom-up, encouraging you to model and serve department or business analytics in the data warehouse itself. Data is modeled with facts and dimensions in a star schema.
 
-In Kimball's approach, data is modeled with two general types of tables: **facts** and **dimensions**. You can think of a fact table as a table of numbers, and dimension tables as qualitative data referencing a fact. Dimension tables surround a single fact table in a relationship called a **star schema**.
+**Why it matters:** Kimball may enable faster iteration and modeling than Inmon, with the trade-off of potential looser data integration, data redundancy, and duplication. As Inmon says, "A data mart is never a substitute for a data warehouse," highlighting the philosophical difference.
 
 <DiagramContainer title="Kimball Star Schema">
-  <Group title="Star Schema Structure">
-    <Row>
-      <Box color={colors.blue} title="Date Dimension">Time attributes</Box>
-      <Box color={colors.green} title="Customer Dimension">Customer attributes</Box>
+  <Column gap="md" align="center">
+    <Row gap="lg">
+      <Box color={colors.blue} variant="outlined" size="sm" icon="📅">Date Dimension</Box>
+      <Box color={colors.green} variant="outlined" size="sm" icon="👤">Customer Dimension</Box>
     </Row>
-    <Box color={colors.yellow} title="Fact Table (Center)">Measurements & Keys</Box>
-    <Row>
-      <Box color={colors.purple} title="Product Dimension">Product attributes</Box>
-      <Box color={colors.pink} title="Location Dimension">Geographic attributes</Box>
+    <Box color={colors.yellow} variant="filled" size="lg" icon="📊">
+      Fact Table (Center)<br/>Measurements & Keys
+    </Box>
+    <Row gap="lg">
+      <Box color={colors.purple} variant="outlined" size="sm" icon="📦">Product Dimension</Box>
+      <Box color={colors.pink} variant="outlined" size="sm" icon="📍">Location Dimension</Box>
     </Row>
-  </Group>
+  </Column>
 </DiagramContainer>
 
-##### Fact tables
+##### Fact Tables
 
-The first type of table in a star schema is the **fact table**, which contains factual, quantitative, and event-related data. The data in a fact table is immutable because facts relate to events. Therefore, fact tables don't change and are append-only. Fact tables are typically narrow and long, meaning they have not a lot of columns but a lot of rows that represent events. Fact tables should be at the lowest grain possible.
+**In plain English:** A fact table is like a transaction log—it records events that happened (sales, clicks, orders). Each row is an immutable fact about something that occurred, with numbers (amounts, quantities, counts) and foreign keys pointing to dimension tables for context.
 
-Queries against a star schema start with the fact table. Each row of a fact table should represent the grain of the data. Avoid aggregating or deriving data within a fact table. If you need to perform aggregations or derivations, do so in a downstream query, data mart table, or view. Finally, fact tables don't reference other fact tables; they reference only dimensions.
+**In technical terms:** The fact table contains factual, quantitative, and event-related data. The data is immutable because facts relate to events. Fact tables are typically narrow and long (few columns, many rows). They should be at the lowest grain possible and reference only dimensions, not other fact tables.
 
 **Example Fact Table**
 
@@ -872,11 +1148,13 @@ Queries against a star schema start with the fact table. Each row of a fact tabl
 | 101 | 7 | 20220301 | 75.00 |
 | 102 | 7 | 20220301 | 50.00 |
 
-Notice that the data types in the fact table are all numbers (integers and floats); there are no strings. The fact table has keys that reference dimension tables containing their respective attributes. The gross sales amount represents the total sale for the sales event.
+Notice that the data types are all numbers (integers and floats); there are no strings. The fact table has keys that reference dimension tables containing their respective attributes.
 
-##### Dimension tables
+##### Dimension Tables
 
-The second primary type of table in a Kimball data model is called a **dimension**. Dimension tables provide the reference data, attributes, and relational context for the events stored in fact tables. Dimension tables are smaller than fact tables and take an opposite shape, typically wide and short. When joined to a fact table, dimensions can describe the events' what, where, and when. Dimensions are denormalized, with the possibility of duplicate data.
+**In plain English:** Dimension tables are like reference books that provide context. They answer questions like "who," "what," "when," and "where" about the facts. They're wide (many columns) and short (relatively few rows).
+
+**In technical terms:** Dimension tables provide reference data, attributes, and relational context for the events stored in fact tables. They are smaller than fact tables and take an opposite shape, typically wide and short. Dimensions are denormalized, with the possibility of duplicate data.
 
 **Date Dimension Table**
 
@@ -886,11 +1164,9 @@ The second primary type of table in a Kimball data model is called a **dimension
 | 20220302 | 2022-03-02 | 2022 | 1 | 3 | Wednesday |
 | 20220303 | 2022-03-03 | 2022 | 1 | 3 | Thursday |
 
-In a Kimball data model, dates are typically stored in a date dimension, allowing you to reference the date key (DateKey) between the fact and date dimension table. With the date dimension table, you can easily answer questions like, "What are my total sales in the first quarter of 2022?" or "How many more customers shop on Tuesday than Wednesday?" The beauty of a date dimension is that you can add as many new fields as makes sense to analyze your data.
+With the date dimension table, you can easily answer questions like, "What are my total sales in the first quarter of 2022?" or "How many more customers shop on Tuesday than Wednesday?"
 
 ##### Slowly Changing Dimensions (SCD)
-
-A **slowly changing dimension (SCD)** is necessary to track changes in dimensions. Let's look at a Type 2 customer dimension table:
 
 **Type 2 Customer Dimension Table**
 
@@ -901,72 +1177,78 @@ A **slowly changing dimension (SCD)** is necessary to track changes in dimension
 | 7 | Matt | Housley | 84123 | 2021-09-19 | 9999-01-01 |
 | 11 | Lana | Belle | 90210 | 2022-02-04 | 9999-01-01 |
 
-For example, take a look at CustomerKey 5, with the EFF_StartDate (effective start date) of 2019-01-04 and an EFF_EndDate of 9999-01-01. This means Joe Reis's customer record was created in the customer dimension table on 2019-01-04 and has an end date of 9999-01-01, meaning the customer record is active and isn't changed.
-
-Now let's look at Matt Housley's customer record (CustomerKey = 7). Notice the two entries with start dates: 2020-05-04 and 2021-09-19. It looks like Housley changed his zip code on 2021-09-19, resulting in a change to his customer record. When the data is queried for the most recent customer records, you will query where the end date is equal to 9999-01-01.
-
 <ComparisonTable
-  title="Types of Slowly Changing Dimensions"
+  beforeTitle="SCD Types"
+  afterTitle="Characteristics"
+  beforeColor={colors.blue}
+  afterColor={colors.green}
   items={[
     {
-      aspect: 'Type 1',
-      approach: 'Overwrite',
-      description: 'Overwrite existing dimension records',
-      tradeoffs: 'Super simple, but no access to historical records'
+      label: "Type 1 (Overwrite)",
+      before: "Overwrite existing dimension records",
+      after: "Super simple, but no access to historical records"
     },
     {
-      aspect: 'Type 2',
-      approach: 'Add New Row',
-      description: 'Keep full history by creating new records',
-      tradeoffs: 'Complete history, but table grows larger'
+      label: "Type 2 (Add New Row)",
+      before: "Keep full history by creating new records",
+      after: "Complete history, but table grows larger"
     },
     {
-      aspect: 'Type 3',
-      approach: 'Add New Column',
-      description: 'Add columns for current and previous values',
-      tradeoffs: 'Limited history, schema changes frequently'
+      label: "Type 3 (Add New Column)",
+      before: "Add columns for current and previous values",
+      after: "Limited history, schema changes frequently"
     }
   ]}
 />
 
-##### Star schema
+##### Star Schema
 
-Now that you have a basic understanding of facts and dimensions, it's time to integrate them into a star schema. The star schema represents the data model of the business. Unlike highly normalized approaches to data modeling, the star schema is a fact table surrounded by the necessary dimensions. This results in fewer joins than other data models, which speeds up query performance. Another advantage of a star schema is it's arguably easier for business users to understand and use.
+Now that you have a basic understanding of facts and dimensions, it's time to integrate them into a star schema. The star schema represents the data model of the business. Unlike highly normalized approaches, the star schema is a fact table surrounded by the necessary dimensions.
 
-Note that the star schema shouldn't reflect a particular report, though you can model a report in a downstream data mart or directly in your BI tool. The star schema should capture the facts and attributes of your business logic and be flexible enough to answer the respective critical questions.
+**Benefits:**
+- Fewer joins than other data models, speeding up query performance
+- Arguably easier for business users to understand and use
+- Flexible enough to answer critical business questions
 
-Because a star schema has one fact table, sometimes you'll have multiple star schemas that address different facts of the business. You should strive to reduce the number of dimensions whenever possible since this reference data can potentially be reused among different fact tables. A dimension that is reused across multiple star schemas, thus sharing the same fields, is called a **conformed dimension**. A conformed dimension allows you to combine multiple fact tables across multiple star schemas.
+**Conformed Dimensions:**
+A dimension that is reused across multiple star schemas, sharing the same fields, is called a **conformed dimension**. A conformed dimension allows you to combine multiple fact tables across multiple star schemas.
 
 #### Data Vault
 
-Whereas Kimball and Inmon focus on the structure of business logic in the data warehouse, the Data Vault offers a different approach to data modeling. Created in the 1990s by Dan Linstedt, the Data Vault methodology separates the structural aspects of a source system's data from its attributes. Instead of representing business logic in facts, dimensions, or highly normalized tables, a Data Vault simply loads data from source systems directly into a handful of purpose-built tables in an insert-only manner. Unlike the other data modeling approaches you've learned about, there's no notion of good, bad, or conformed data in a Data Vault.
+**In plain English:** Data Vault is like a highly organized filing system where you separate "what things are" (hubs), "how they relate" (links), and "what we know about them" (satellites). It's extremely flexible for changing business requirements because you just add new links or satellites rather than restructuring everything.
+
+**In technical terms:** Created in the 1990s by Dan Linstedt, the Data Vault methodology separates the structural aspects of a source system's data from its attributes. Instead of representing business logic in facts, dimensions, or highly normalized tables, a Data Vault simply loads data from source systems directly into purpose-built tables in an insert-only manner.
+
+**Why it matters:** Data Vault is designed for agility, flexibility, and scalability. The goal is to keep data as closely aligned to the business as possible, even while the business's data evolves. However, business logic is created when querying, not in the stored model.
 
 <DiagramContainer title="Data Vault Core Components">
-  <Row>
-    <Box color={colors.blue} title="Hubs">Business keys</Box>
+  <Row gap="lg">
+    <Box color={colors.blue} icon="🎯">
+      Hubs<br/>
+      <small>Business keys</small>
+    </Box>
     <Arrow direction="right" />
-    <Box color={colors.purple} title="Links">Relationships between keys</Box>
+    <Box color={colors.purple} icon="🔗">
+      Links<br/>
+      <small>Relationships between keys</small>
+    </Box>
     <Arrow direction="right" />
-    <Box color={colors.green} title="Satellites">Attributes & context</Box>
+    <Box color={colors.green} icon="📝">
+      Satellites<br/>
+      <small>Attributes & context</small>
+    </Box>
   </Row>
 </DiagramContainer>
-
-Data moves fast these days, and data models need to be agile, flexible, and scalable; the Data Vault methodology aims to meet this need. The goal of this methodology is to keep the data as closely aligned to the business as possible, even while the business's data evolves.
-
-A Data Vault model consists of three main types of tables: **hubs**, **links**, and **satellites**. In short, a hub stores business keys, a link maintains relationships among business keys, and a satellite represents a business key's attributes and context.
 
 ##### Hubs
 
 Queries often involve searching by a business key, such as a customer ID or an order ID. A **hub** is the central entity of a Data Vault that retains a record of all unique business keys loaded into the Data Vault.
 
-A hub always contains the following standard fields:
-
+**A hub always contains:**
 - **Hash key**: The primary key used to join data between systems (calculated hash field like MD5)
 - **Load date**: The date the data was loaded into the hub
 - **Record source**: The source from which the unique record was obtained
 - **Business key(s)**: The key used to identify a unique record
-
-It's important to note that a hub is insert-only, and data is not altered in a hub. Once data is loaded into a hub, it's permanent.
 
 **Product Hub Example**
 
@@ -986,7 +1268,7 @@ It's important to note that a hub is insert-only, and data is not altered in a h
 
 ##### Links
 
-A **link table** tracks the relationships of business keys between hubs. Link tables connect hubs, ideally at the lowest possible grain. Because link tables connect data from various hubs, they are many to many. The Data Vault model's relationships are straightforward and handled through changes to the links. This provides excellent flexibility in the inevitable event that the underlying data changes.
+A **link table** tracks the relationships of business keys between hubs. Link tables connect hubs, ideally at the lowest possible grain. Because link tables connect data from various hubs, they are many to many.
 
 **Link Table for Products and Orders**
 
@@ -999,7 +1281,7 @@ A **link table** tracks the relationships of business keys between hubs. Link ta
 
 ##### Satellites
 
-**Satellites** are descriptive attributes that give meaning and context to hubs. Satellites can connect to either hubs or links. The only required fields in a satellite are a primary key consisting of the business key of the parent hub and a load date. Beyond that, a satellite can contain however many attributes that make sense.
+**Satellites** are descriptive attributes that give meaning and context to hubs. Satellites can connect to either hubs or links. The only required fields are a primary key consisting of the business key of the parent hub and a load date.
 
 **SatelliteProduct Example**
 
@@ -1009,29 +1291,44 @@ A **link table** tracks the relationships of business keys between hubs. Link ta
 | de8435530d... | 2021-03-09 | ERP | Whatchamacallit | 25 |
 | cf27369bd8... | 2021-03-09 | ERP | Whozeewhatzit | 75 |
 
-Unlike other data modeling techniques we've discussed, in a Data Vault, the business logic is created and interpreted when the data from these tables is queried. Please be aware that the Data Vault model can be used with other data modeling techniques. It's not unusual for a Data Vault to be the landing zone for analytical data, after which it's separately modeled in a data warehouse, commonly using a star schema. The Data Vault model also can be adapted for NoSQL and streaming data sources.
+Unlike other data modeling techniques, in a Data Vault, the business logic is created and interpreted when the data from these tables is queried. The Data Vault model can be used with other data modeling techniques—it's not unusual for a Data Vault to be the landing zone for analytical data, after which it's separately modeled in a data warehouse using a star schema.
 
-#### Wide denormalized tables
-
-The strict modeling approaches we've described, especially Kimball and Inmon, were developed when data warehouses were expensive, on premises, and heavily resource-constrained with tightly coupled compute and storage. While batch data modeling has traditionally been associated with these strict approaches, more relaxed approaches are becoming more common.
-
-There are reasons for this. First, the popularity of the cloud means that storage is dirt cheap. It's cheaper to store data than agonize over the optimum way to represent the data in storage. Second, the popularity of nested data (JSON and similar) means schemas are flexible in source and analytical systems.
-
-You have the option to rigidly model your data as we've described, or you can choose to throw all of your data into a single wide table. A **wide table** is just what it sounds like: a highly denormalized and very wide collection of many fields, typically created in a columnar database. A field may be a single value or contain nested data. The data is organized along with one or multiple keys; these keys are closely tied to the grain of the data.
-
-:::tip Three-Part Explanation
+#### Wide Denormalized Tables
 
 **In plain English:** A wide table is like spreading out all your data horizontally—instead of having many interconnected tables, you put everything in one massive table with hundreds or thousands of columns. It's the data modeling equivalent of packing everything in one big suitcase instead of organizing items across multiple bags.
 
-**In technical terms:** Wide tables are highly denormalized, columnar structures that can contain thousands of columns with sparse data (many nulls). They combine facts and dimensions in a single table, often with nested data structures, eliminating the need for joins at query time.
+**In technical terms:** Wide tables are highly denormalized and very wide collections of many fields, typically created in columnar databases. A field may be a single value or contain nested data. Wide tables can potentially have thousands of columns and are usually sparse (many nulls).
 
 **Why it matters:** In modern cloud columnar databases, wide tables can dramatically improve query performance by eliminating joins. Storage is cheap, and columnar databases handle nulls efficiently, making this once-heretical approach practical and performant for analytics workloads.
 
-:::
-
-A wide table can potentially have thousands of columns, whereas fewer than 100 are typical in relational databases. Wide tables are usually sparse; the vast majority of entries in a given field may be null. This is extremely expensive in a traditional relational database because the database allocates a fixed amount of space for each field entry; nulls take up virtually no space in a columnar database.
-
-Analytics queries on wide tables often run faster than equivalent queries on highly normalized data requiring many joins. Removing joins can have a huge impact on scan performance. The wide table simply contains all of the data you would have joined in a more rigorous modeling approach. Facts and dimensions are represented in the same table.
+<ComparisonTable
+  beforeTitle="Traditional Approach"
+  afterTitle="Wide Table Approach"
+  beforeColor={colors.red}
+  afterColor={colors.green}
+  items={[
+    {
+      label: "Structure",
+      before: "Many normalized tables with joins",
+      after: "Single wide denormalized table"
+    },
+    {
+      label: "Performance",
+      before: "Joins can be expensive",
+      after: "No joins needed, faster queries"
+    },
+    {
+      label: "Storage",
+      before: "Minimal redundancy",
+      after: "More storage, but it's cheap"
+    },
+    {
+      label: "Flexibility",
+      before: "Schema changes require planning",
+      after: "Easy to add columns"
+    }
+  ]}
+/>
 
 **Wide Table Example**
 
@@ -1039,218 +1336,572 @@ Analytics queries on wide tables often run faster than equivalent queries on hig
 |---------|------------|------------|--------------|-----------|------|------------|
 | 100 | `[{"sku": 1, "price": 50, "quantity": 1, "name": "Thingamajig"}, {"sku": 2, "price": 25, "quantity": 2, "name": "Whatchamacallit"}]` | 5 | Joe Reis | 2022-03-01 | abc.com | US |
 
-We suggest using a wide table when you don't care about data modeling, or when you have a lot of data that needs more flexibility than traditional data-modeling rigor provides. Wide tables also lend themselves to streaming data. As data moves toward fast-moving schemas and streaming-first, we expect to see a new wave of data modeling, perhaps something along the lines of "relaxed normalization."
+We suggest using a wide table when you don't care about data modeling, or when you have a lot of data that needs more flexibility than traditional data-modeling rigor provides. Wide tables also lend themselves to streaming data.
 
 #### What If You Don't Model Your Data?
 
-You also have the option of not modeling your data. In this case, just query data sources directly. This pattern is often used, especially when companies are just getting started and want to get quick insights or share analytics with their users. While it allows you to get answers to various questions, you should consider the following:
+You also have the option of not modeling your data—just query data sources directly. This pattern is often used when companies are just getting started and want to get quick insights.
 
+**Questions to consider:**
 - If I don't model my data, how do I know the results of my queries are consistent?
-- Do I have proper definitions of business logic in the source system, and will my query produce truthful answers?
-- What query load am I putting on my source systems, and how does this impact users of these systems?
+- Do I have proper definitions of business logic in the source system?
+- What query load am I putting on my source systems, and how does this impact users?
 
 At some point, you'll probably gravitate toward a stricter batch data model paradigm and a dedicated data architecture that doesn't rely on the source systems for the heavy lifting.
 
-### Modeling Streaming Data
+### 3.5. Modeling Streaming Data
 
-Whereas many data-modeling techniques are well established for batch, this is not the case for streaming data. Because of the unbounded and continuous nature of streaming data, translating batch techniques like Kimball to a streaming paradigm is tricky, if not impossible. For example, given a stream of data, how would you continuously update a Type-2 slowly changing dimension without bringing your data warehouse to its knees?
+**In plain English:** Streaming data is like a river—it's constantly flowing and changing. The batch data modeling techniques (Kimball, Inmon, Data Vault) were designed for lakes of stored data, not rivers. We need new approaches that can handle data that's always in motion with schemas that change frequently.
 
-The world is evolving from batch to streaming and from on premises to the cloud. The constraints of the older batch methods no longer apply. That said, big questions remain about how to model data to balance the need for business logic against fluid schema changes, fast-moving data, and self-service. What is the streaming equivalent of the preceding batch data model approaches? There isn't (yet) a consensus approach on streaming data modeling.
+**In technical terms:** Because of the unbounded and continuous nature of streaming data, translating batch techniques to a streaming paradigm is tricky, if not impossible. There isn't (yet) a consensus approach on streaming data modeling. The challenge is that payload schemas might change on a whim, requiring flexible approaches.
 
-As you may recall, two main types of streams exist: event streams and CDC. Most of the time, the shape of the data in these streams is semistructured, such as JSON. The challenge with modeling streaming data is that the payload's schema might change on a whim. For example, suppose you have an IoT device that recently upgraded its firmware and introduced a new field. In that case, it's possible that your downstream destination data warehouse or processing pipeline isn't aware of this change and breaks.
+**Why it matters:** The world is evolving from batch to streaming and from on premises to the cloud. The constraints of older batch methods no longer apply. New approaches will likely incorporate metrics and semantic layers, data pipelines, and traditional analytics workflows in a streaming layer that sits directly on top of the source system.
 
-The streaming data experts we've talked with overwhelmingly suggest you anticipate changes in the source data and keep a flexible schema. This means there's no rigid data model in the analytical database. Instead, assume the source systems are providing the correct data with the right business definition and logic, as it exists today. And because storage is cheap, store the recent streaming and saved historical data in a way they can be queried together. Optimize for comprehensive analytics against a dataset with a flexible schema.
-
-:::tip Future of Data Modeling
-The world of data modeling is changing, and we believe a sea change will soon occur in data model paradigms. These new approaches will likely incorporate metrics and semantic layers, data pipelines, and traditional analytics workflows in a streaming layer that sits directly on top of the source system. Since data is being generated in real time, the notion of artificially separating source and analytics systems into two distinct buckets may not make as much sense as when data moved more slowly and predictably. Time will tell…
+:::caution Streaming Data Challenges
+For example, given a stream of data, how would you continuously update a Type-2 slowly changing dimension without bringing your data warehouse to its knees? These are the kinds of problems that make traditional batch modeling techniques unsuitable for streaming.
 :::
 
-## Transformations
+**Expert Consensus:**
+The streaming data experts overwhelmingly suggest you:
+- Anticipate changes in the source data
+- Keep a flexible schema
+- Assume source systems are providing correct data with the right business definitions
+- Store recent streaming and saved historical data together
+- Optimize for comprehensive analytics against a dataset with a flexible schema
 
-> The net result of transforming data is the ability to unify and integrate data. Once data is transformed, the data can be viewed as a single entity. But without transforming data, you cannot have a unified view of data across the organization.
+> **Insight**
 >
-> — Bill Inmon
+> The world of data modeling is changing, and we believe a sea change will soon occur in data model paradigms. Since data is being generated in real time, the notion of artificially separating source and analytics systems into two distinct buckets may not make as much sense as when data moved more slowly and predictably. Time will tell…
 
-Now that we've covered queries and data modeling, you might be wondering, if I can model data, query it, and get results, why do I need to think about transformations? Transformations manipulate, enhance, and save data for downstream use, increasing its value in a scalable, reliable, and cost-effective manner.
+---
 
-:::tip Three-Part Explanation
+## 4. Transformations
 
-**In plain English:** Imagine running the same complicated recipe every time someone wants a meal—it's exhausting and wasteful. Transformations are like meal prep: you do the heavy lifting once (cleaning, chopping, cooking), save the prepared ingredients, and then quickly assemble meals when needed. Instead of repeating the same data processing work hundreds of times, you transform it once and save the results.
+**In plain English:** Imagine running the same complicated recipe every time someone wants a meal—it's exhausting and wasteful. Transformations are like meal prep: you do the heavy lifting once (cleaning, chopping, cooking), save the prepared ingredients, and then quickly assemble meals when needed.
 
 **In technical terms:** A transformation differs from a query in two key ways: (1) it persists results for downstream consumption, and (2) it handles complex, multi-source dataflows through orchestrated pipelines. Transformations apply business logic, aggregate data, normalize structures, and prepare data products for serving.
 
 **Why it matters:** Without transformations, every user would run expensive queries repeatedly, wasting time and money. Transformations enable scalability, consistency, and cost-efficiency by performing compute-intensive work once and reusing results across the organization.
 
-:::
+> **"The net result of transforming data is the ability to unify and integrate data. Once data is transformed, the data can be viewed as a single entity. But without transforming data, you cannot have a unified view of data across the organization."**
+>
+> — Bill Inmon
 
-Imagine running a query every time you want to view results from a particular dataset. You'd run the same query dozens or hundreds of times a day. Imagine that this query involves parsing, cleansing, joining, unioning, and aggregating across 20 datasets. To further exacerbate the pain, the query takes 30 minutes to run, consumes significant resources, and incurs substantial cloud charges over several repetitions. You and your stakeholders would probably go insane. Thankfully, you can save the results of your query instead, or at least run the most compute-intensive portions only once, so subsequent queries are simplified.
+Transformations critically rely on one of the major undercurrents in this book: **orchestration**. Orchestration combines many discrete operations that store data temporarily or permanently for consumption by downstream transformations or serving.
 
-A transformation differs from a query. A query retrieves the data from various sources based on filtering and join logic. A transformation persists the results for consumption by additional transformations or queries. These results may be stored ephemerally or permanently.
+### 4.1. Batch Transformations
 
-Besides persistence, a second aspect that differentiates transformations from queries is complexity. You'll likely build complex pipelines that combine data from multiple sources and reuse intermediate results for multiple final outputs. These complex pipelines might normalize, model, aggregate, or featurize data.
+**In plain English:** Batch transformations are like doing laundry—you gather up a load of dirty clothes (data), run them through the washing machine (transformation), and end up with clean, folded clothes (transformed data) ready to use. You do this on a schedule, like daily or hourly.
 
-Transformations critically rely on one of the major undercurrents in this book: **orchestration**. Orchestration combines many discrete operations, such as intermediate transformations, that store data temporarily or permanently for consumption by downstream transformations or serving. Increasingly, transformation pipelines span not only multiple tables and datasets but also multiple systems.
+**In technical terms:** Batch transformations run on discrete chunks of data, in contrast to streaming transformations where data is processed continuously. They can run on a fixed schedule (daily, hourly, every 15 minutes) to support ongoing reporting, analytics, and ML models.
 
-### Batch Transformations
+**Why it matters:** Batch transformations are the workhorses of data engineering—they power most reporting, analytics, and machine learning workflows. Understanding batch transformation patterns and technologies is essential for building scalable data pipelines.
 
-Batch transformations run on discrete chunks of data, in contrast to streaming transformations, where data is processed continuously as it arrives. Batch transformations can run on a fixed schedule (e.g., daily, hourly, or every 15 minutes) to support ongoing reporting, analytics, and ML models. In this section, you'll learn various batch transformation patterns and technologies.
+#### Distributed Joins
 
-#### Distributed joins
+The basic idea behind distributed joins is that we need to break a logical join into much smaller node joins that run on individual servers in the cluster.
 
-The basic idea behind distributed joins is that we need to break a logical join (the join defined by the query logic) into much smaller node joins that run on individual servers in the cluster. The basic distributed join patterns apply whether one is in MapReduce, BigQuery, Snowflake, or Spark, though the details of intermediate storage between processing steps vary (on disk or in memory).
-
-##### Broadcast join
-
-A **broadcast join** is generally asymmetric, with one large table distributed across nodes and one small table that can easily fit on a single node.
+##### Broadcast Join
 
 <DiagramContainer title="Broadcast Join">
-  <ProcessFlow
-    steps={[
-      { label: 'Small Table A', color: colors.blue, description: 'Fits on single node' },
-      { label: 'Broadcast', color: colors.purple, description: 'Send to all nodes' },
-      { label: 'Join with Large Table B', color: colors.green, description: 'Join on each node' },
-      { label: 'Combined Results', color: colors.emerald }
-    ]}
-  />
+  <Column gap="md">
+    <Row gap="md">
+      <Box color={colors.blue} icon="📊">Small Table A<br/><small>Fits on single node</small></Box>
+      <Arrow direction="right" label="Broadcast to all nodes" />
+      <Box color={colors.green} icon="🌐">All Nodes</Box>
+    </Row>
+    <Arrow direction="down" label="Join locally" />
+    <Box color={colors.purple} icon="💾">Large Table B<br/><small>Distributed across nodes</small></Box>
+    <Arrow direction="down" />
+    <Box color={colors.emerald} icon="✅">Combined Results</Box>
+  </Column>
 </DiagramContainer>
 
-The query engine "broadcasts" the small table (table A) out to all nodes, where it gets joined to the parts of the large table (table B). Broadcast joins are far less compute intensive than shuffle hash joins.
+**In plain English:** A broadcast join is like making photocopies of a small reference manual and giving one to every worker. Each worker can then match their big pile of work against their copy of the manual without waiting for anyone else.
 
-In practice, table A is often a down-filtered larger table that the query engine collects and broadcasts. One of the top priorities in query optimizers is join reordering. With the early application of filters, and movement of small tables to the left (for left joins), it is often possible to dramatically reduce the amount of data that is processed in each join.
+**In technical terms:** A broadcast join is generally asymmetric, with one large table distributed across nodes and one small table that can easily fit on a single node. The query engine "broadcasts" the small table out to all nodes, where it gets joined to the parts of the large table. Broadcast joins are far less compute intensive than shuffle hash joins.
 
-##### Shuffle hash join
+**Why it matters:** Broadcast joins dramatically improve performance when one table is small enough to fit in memory on each node. Query optimizers prioritize creating broadcast joins through early filtering and join reordering.
 
-If neither table is small enough to fit on a single node, the query engine will use a **shuffle hash join**.
+##### Shuffle Hash Join
 
 <DiagramContainer title="Shuffle Hash Join">
-  <Group title="Repartitioning by Join Key">
-    <Row>
-      <Box color={colors.blue} title="Initial Table A">Distributed randomly</Box>
-      <Box color={colors.purple} title="Initial Table B">Distributed randomly</Box>
+  <Column gap="md">
+    <Row gap="lg">
+      <Box color={colors.blue} variant="outlined">Initial Table A<br/><small>Distributed randomly</small></Box>
+      <Box color={colors.purple} variant="outlined">Initial Table B<br/><small>Distributed randomly</small></Box>
     </Row>
     <Arrow direction="down" label="Shuffle by hash(join_key)" />
-    <Row>
-      <Box color={colors.green} title="Repartitioned A">By join key</Box>
-      <Box color={colors.emerald} title="Repartitioned B">By join key</Box>
+    <Row gap="lg">
+      <Box color={colors.green} variant="outlined">Repartitioned A<br/><small>By join key</small></Box>
+      <Box color={colors.emerald} variant="outlined">Repartitioned B<br/><small>By join key</small></Box>
     </Row>
-    <Arrow direction="down" label="Local joins" />
-    <Box color={colors.yellow} title="Joined Results">On each node</Box>
-  </Group>
+    <Arrow direction="down" label="Local joins on each node" />
+    <Box color={colors.yellow} variant="filled">Joined Results</Box>
+  </Column>
 </DiagramContainer>
 
-A hashing scheme is used to repartition data by join key. The data is then reshuffled to the appropriate node, and the new partitions for tables A and B on each node are joined. Shuffle hash joins are generally more resource intensive than broadcast joins.
+**In plain English:** If neither table is small enough to broadcast, you need a shuffle hash join. It's like sorting two decks of cards by suit—you redistribute the cards so all hearts are in one pile, all spades in another, etc. Then you can match them up pile by pile.
 
-#### ETL, ELT, and data pipelines
+**In technical terms:** A hashing scheme is used to repartition data by join key. The data is then reshuffled to the appropriate node, and the new partitions for tables A and B on each node are joined. Shuffle hash joins are generally more resource intensive than broadcast joins.
 
-As we discussed in Chapter 3, a widespread transformation pattern dating to the early days of relational databases is a batch ETL. Traditional ETL relies on an external transformation system to pull, transform, and clean data while preparing it for a target schema, such as a data mart or a Kimball star schema. The transformed data would then be loaded into a target system, such as a data warehouse, where business analytics could be performed.
+**Why it matters:** Shuffle hash joins enable joining arbitrarily large tables, though at a performance cost. Understanding when and how shuffles occur helps optimize query performance.
+
+#### ETL, ELT, and Data Pipelines
 
 <ComparisonTable
-  title="ETL vs. ELT"
+  beforeTitle="ETL (Extract-Transform-Load)"
+  afterTitle="ELT (Extract-Load-Transform)"
+  beforeColor={colors.orange}
+  afterColor={colors.green}
   items={[
     {
-      aspect: 'ETL (Extract-Transform-Load)',
-      approach: 'Transform before loading',
-      description: 'External system transforms data, then loads to warehouse',
-      bestFor: 'Resource-constrained systems, complex pre-processing'
+      label: "Approach",
+      before: "Transform before loading",
+      after: "Load raw, transform in warehouse"
     },
     {
-      aspect: 'ELT (Extract-Load-Transform)',
-      approach: 'Load raw, transform in warehouse',
-      description: 'Load raw data first, transform directly in warehouse',
-      bestFor: 'Modern cloud warehouses with abundant resources'
+      label: "Process",
+      before: "External system transforms data, then loads",
+      after: "Load data first, transform directly in warehouse"
+    },
+    {
+      label: "Best For",
+      before: "Resource-constrained systems, complex pre-processing",
+      after: "Modern cloud warehouses with abundant resources"
+    },
+    {
+      label: "Flexibility",
+      before: "Fixed target schema",
+      after: "Can explore data before finalizing schema"
     }
   ]}
 />
 
-A now-popular evolution of ETL is ELT. As data warehouse systems have grown in performance and storage capacity, it has become common to simply extract raw data from a source system, import it into a data warehouse with minimal transformation, and then clean and transform it directly in the warehouse system.
+**Traditional ETL** relies on an external transformation system to pull, transform, and clean data while preparing it for a target schema. The transformed data would then be loaded into a target system where business analytics could be performed.
 
-A second, slightly different notion of ELT was popularized with the emergence of data lakes. In this version, the data is not transformed at the time it's loaded. Indeed, massive quantities of data may be loaded with no preparation and no plan whatsoever. The assumption is that the transformation step will happen at some undetermined future time. Ingesting data without a plan is a great recipe for a data swamp.
+**Modern ELT** extracts raw data from a source system, imports it into a data warehouse with minimal transformation, and then cleans and transforms it directly in the warehouse system.
 
 :::warning Bill Inmon's Warning
 I've always been a fan of ETL because of the fact that ETL forces you to transform data before you put it into a form where you can work with it. But some organizations want to simply take the data, put it into a database, then do the transformation.... I've seen too many cases where the organization says, oh we'll just put the data in and transform it later. And guess what? Six months later, that data [has] never been touched.
 :::
 
-Increasingly, we feel that the terms ETL and ELT should be applied only at the micro level (within individual transformation pipelines) rather than at the macro level (to describe a transformation pattern for a whole organization). Organizations no longer need to standardize on ETL or ELT but can instead focus on applying the proper technique on a case-by-case basis as they build data pipelines.
+> **Insight**
+>
+> Increasingly, we feel that the terms ETL and ELT should be applied only at the micro level (within individual transformation pipelines) rather than at the macro level (to describe a transformation pattern for a whole organization). Organizations no longer need to standardize on ETL or ELT but can instead focus on applying the proper technique on a case-by-case basis.
 
-For more details on transformations including SQL vs. code-based tools, update patterns (truncate, insert-only, upsert/merge), business logic, MapReduce, materialized views, streaming transformations, and more, please refer to the complete chapter content.
+#### Update Patterns
 
-## Whom You'll Work With
+Since transformations persist data, we will often update persisted data in place. Let's consider several basic update patterns:
 
-Queries, transformations, and modeling impact all stakeholders up and down the data engineering lifecycle. The data engineer is responsible for several things at this stage in the lifecycle. From a technical angle, the data engineer designs, builds, and maintains the integrity of the systems that query and transform data. The data engineer also implements data models within this system. This is the most "full-contact" stage where your focus is to add as much value as possible, both in terms of functioning systems and reliable and trustworthy data.
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Truncate and Reload",
+      icon: "🔄",
+      color: colors.blue,
+      items: [
+        "Wipes old data completely",
+        "Reruns transformations",
+        "Loads into cleared table",
+        "Simple but not always efficient"
+      ]
+    },
+    {
+      title: "Insert Only",
+      icon: "➕",
+      color: colors.green,
+      items: [
+        "Inserts new records only",
+        "Doesn't change old records",
+        "Maintains complete history",
+        "May need deduplication at query time"
+      ]
+    },
+    {
+      title: "Delete",
+      icon: "🗑️",
+      color: colors.red,
+      items: [
+        "Hard delete: permanently removes",
+        "Soft delete: marks as deleted",
+        "Insert deletion: adds deleted flag",
+        "More expensive in columnar systems"
+      ]
+    },
+    {
+      title: "Upsert/Merge",
+      icon: "🔀",
+      color: colors.purple,
+      items: [
+        "Updates existing records",
+        "Inserts new records",
+        "Uses copy-on-write (COW)",
+        "Most complex but most flexible"
+      ]
+    }
+  ]}
+/>
+
+:::warning
+When inserting data into a column-oriented OLAP database, avoid single-row inserts. This antipattern puts a massive load on the system and causes data to be written in many separate files. Instead, load data in a periodic micro-batch or batch fashion.
+:::
+
+### 4.2. Streaming Transformations and Processing
+
+**In plain English:** Streaming transformations are like working on an assembly line that never stops. Instead of waiting for a batch of items to pile up, you process each item as it flows by, enriching it, combining it with other streams, and passing it along—all in real time.
+
+**In technical terms:** Streaming transformations aim to prepare data for downstream consumption in real time. Unlike batch transformations that run on discrete chunks, streaming transformations process data continuously as it arrives, using windows, triggers, and streaming DAGs.
+
+**Why it matters:** Streaming transformations enable real-time data products, immediate responses to events, and continuous data enrichment. They're essential for use cases requiring low latency and immediate action.
+
+#### Basics
+
+Streaming queries run dynamically to present a current view of data. Streaming transformations aim to prepare data for downstream consumption.
+
+<DiagramContainer title="Streaming Transformation Pipeline">
+  <ProcessFlow
+    direction="horizontal"
+    steps={[
+      {
+        title: "Incoming Stream",
+        description: "Raw IoT events",
+        icon: "🌊",
+        color: colors.blue
+      },
+      {
+        title: "Stream Processor",
+        description: "Enrich with metadata",
+        icon: "⚙️",
+        color: colors.purple
+      },
+      {
+        title: "Enriched Stream",
+        description: "Complete event data",
+        icon: "✨",
+        color: colors.green
+      },
+      {
+        title: "Downstream",
+        description: "Queries & metrics",
+        icon: "📊",
+        color: colors.emerald
+      }
+    ]}
+  />
+</DiagramContainer>
+
+For instance, a data engineering team may have an incoming stream carrying events from an IoT source. The stream-processing engine queries a separate database containing metadata by device ID, generates new events with the added data, and passes it on to another stream.
+
+> **Insight**
+>
+> The line between transformations and queries is blurry in batch processing, but the differences become even more subtle in the domain of streaming. For example, if we dynamically compute roll-up statistics on windows and send the output to a target stream, is this a transformation or a query? Maybe we will eventually adopt new terminology that better represents real-world use cases.
+
+#### Streaming DAGs
+
+<DiagramContainer title="Simple Streaming DAG">
+  <Column gap="md">
+    <Row gap="lg">
+      <Box color={colors.blue} icon="🌊">Website Clickstream</Box>
+      <Box color={colors.purple} icon="🌊">IoT Data Stream</Box>
+    </Row>
+    <Arrow direction="down" label="Preprocess each stream" />
+    <Row gap="lg">
+      <Box color={colors.blue} variant="outlined">Standardized Clickstream</Box>
+      <Box color={colors.purple} variant="outlined">Standardized IoT Data</Box>
+    </Row>
+    <Arrow direction="down" label="Merge" />
+    <Box color={colors.green} icon="✅" size="lg">
+      Unified User Activity Stream
+    </Box>
+  </Column>
+</DiagramContainer>
+
+One interesting notion is the streaming DAG. Suppose we want to combine website clickstream data with IoT data to get a unified view of user activity. Each data stream needs to be preprocessed into a standard format.
+
+This has long been possible by combining a streaming store (Kafka) with a stream processor (Flink). Creating the DAG amounted to building a complex Rube Goldberg machine with numerous topics and processing jobs connected. **Pulsar** dramatically simplifies this process by treating DAGs as a core streaming abstraction.
+
+#### Micro-Batch Versus True Streaming
+
+<ComparisonTable
+  beforeTitle="Micro-Batch"
+  afterTitle="True Streaming"
+  beforeColor={colors.orange}
+  afterColor={colors.green}
+  items={[
+    {
+      label: "Approach",
+      before: "Process small batches frequently (1-120 seconds)",
+      after: "Process one event at a time"
+    },
+    {
+      label: "Examples",
+      before: "Apache Spark Streaming",
+      after: "Apache Flink, Apache Beam"
+    },
+    {
+      label: "Latency",
+      before: "Seconds to minutes",
+      after: "Milliseconds to seconds"
+    },
+    {
+      label: "Best For",
+      before: "Analytics updated every few minutes, existing Spark expertise",
+      after: "Ultra-low latency requirements, per-event processing"
+    }
+  ]}
+/>
+
+**In plain English:** The debate between micro-batch and true streaming is like arguing whether you should wash dishes after every meal (true streaming) or wait until you have a small pile (micro-batch). The answer depends on your situation—if you have dinner parties every night, maybe you need continuous dishwashing. If you live alone, maybe a few times a day is fine.
+
+**In technical terms:** Micro-batching takes a batch-oriented framework and applies it in a streaming situation. True streaming systems process one event at a time with lower latency but potentially higher overhead.
+
+**Why it matters:** There is no universal answer. Micro-batch may work fine for your use case and can be superior depending on your needs. Talk to experts, test the alternatives, and watch out for spurious benchmarks from vendors.
+
+---
+
+## 5. Whom You'll Work With
+
+Queries, transformations, and modeling impact all stakeholders up and down the data engineering lifecycle. The data engineer is responsible for several things at this stage.
+
+**From a technical angle:**
+- Design, build, and maintain systems that query and transform data
+- Implement data models within these systems
+- Ensure performance and reliability
+- Add maximum value through functioning systems and trustworthy data
 
 ### Upstream Stakeholders
 
-When it comes to transformations, upstream stakeholders can be broken into two broad categories: those who control the business definitions and those who control the systems generating data.
+When it comes to transformations, upstream stakeholders can be broken into two broad categories:
 
-When interfacing with upstream stakeholders about business definitions and logic, you'll need to know the data sources—what they are, how they're used, and the business logic and definitions involved. You'll work with the engineers in charge of these source systems and the business stakeholders who oversee the complementary products and apps.
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Business Definitions",
+      icon: "💼",
+      color: colors.blue,
+      items: [
+        "Business stakeholders defining logic",
+        "Product teams owning apps",
+        "Subject matter experts",
+        "Provide definitions and goals for data"
+      ]
+    },
+    {
+      title: "System Owners",
+      icon: "⚙️",
+      color: colors.purple,
+      items: [
+        "Engineers managing source systems",
+        "Application developers",
+        "Platform teams",
+        "Ensure minimal system impact"
+      ]
+    }
+  ]}
+/>
 
-The stakeholders of the upstream systems want to make sure your queries and transformations minimally impact their systems. Ensure bidirectional communication about changes to the data models in source systems, as these can directly impact queries, transformations, and analytical data models.
+The stakeholders of the upstream systems want to make sure your queries and transformations minimally impact their systems. Ensure bidirectional communication about changes to data models in source systems, as these can directly impact queries, transformations, and analytical data models.
 
 ### Downstream Stakeholders
 
-Transformations are where data starts providing utility to downstream stakeholders. Your downstream stakeholders include data analysts, data scientists, ML engineers, and "the business." Collaborate with them to ensure the data model and transformations you provide are performant and useful.
+<CardGrid
+  columns={3}
+  cards={[
+    {
+      title: "Data Analysts",
+      icon: "📊",
+      color: colors.blue,
+      items: [
+        "Need performant queries",
+        "Require quality, complete data",
+        "Create reports and dashboards",
+        "Explore data for insights"
+      ]
+    },
+    {
+      title: "Data Scientists & ML Engineers",
+      icon: "🧬",
+      color: colors.purple,
+      items: [
+        "Build models and features",
+        "Need consistent data definitions",
+        "Integrate into workflows",
+        "Deploy data products"
+      ]
+    },
+    {
+      title: "The Business",
+      icon: "💼",
+      color: colors.green,
+      items: [
+        "Trust data for decisions",
+        "Need accurate, actionable insights",
+        "Rely on timely reporting",
+        "Drive business outcomes"
+      ]
+    }
+  ]}
+/>
 
-Queries should execute as quickly as possible in the most cost-effective way. Analysts, data scientists, and ML engineers should be able to query a data source with confidence the data is of the highest quality and completeness. The business should be able to trust that transformed data is accurate and actionable.
+Collaborate with them to ensure the data model and transformations you provide are performant and useful. Queries should execute as quickly as possible in the most cost-effective way. The business should be able to trust that transformed data is accurate and actionable.
 
-## Undercurrents
+---
+
+## 6. Undercurrents
 
 The transformation stage is where your data mutates and morphs into something useful for the business. Because there are many moving parts, the undercurrents are especially critical at this stage.
 
 ### Security
 
-Queries and transformations combine disparate datasets into new datasets. Who has access to this new dataset? Continue to control access at the column, row, and cell level.
+**In plain English:** When you combine data from different sources into new datasets, you create new security considerations. Who should have access to this combined data? Just because someone can see customer names doesn't mean they should see customer purchase history.
 
-Be aware of attack vectors against your database at query time. Read/write privileges must be tightly monitored and controlled. Keep credentials hidden, avoid copying passwords into code, and never allow unencrypted data to traverse the public internet.
+**In technical terms:** Queries and transformations combine disparate datasets into new datasets. Continue to control access at the column, row, and cell level. Be aware of attack vectors against your database at query time. Read/write privileges must be tightly monitored and controlled.
+
+**Key actions:**
+- Control access to new transformed datasets
+- Keep credentials hidden, avoid copying passwords into code
+- Never allow unencrypted data to traverse the public internet
+- Implement least-privilege access principles
 
 ### Data Management
 
-Transformation inherently creates new datasets that need to be managed. Involve all stakeholders, agree on naming conventions, and ensure proper definitions. Leverage data catalogs and data lineage tools. Consider semantic or metrics layers for business logic. Address regulatory compliance including data masking and deletion capabilities.
+**In plain English:** Transformation creates tons of new datasets, and without good organization, you'll end up with a mess. You need naming conventions everyone follows, definitions everyone agrees on, and ways to track where data came from and where it goes.
+
+**In technical terms:** Transformation inherently creates new datasets that need to be managed. Involve all stakeholders, agree on naming conventions, and ensure proper definitions. Leverage data catalogs and data lineage tools to track data flow and transformations.
+
+**Key considerations:**
+- Naming conventions and documentation
+- Data catalogs for discovery
+- Data lineage for understanding transformations
+- Semantic or metrics layers for business logic
+- Regulatory compliance (GDPR, data deletion)
 
 ### DataOps
 
-Monitor both data quality (schema correctness, data shape, statistics) and system performance (query metrics, resource usage, costs). Run data-quality tests and implement observability. Practice FinOps for cloud cost management.
+<CardGrid
+  columns={2}
+  cards={[
+    {
+      title: "Data Quality",
+      icon: "✅",
+      color: colors.blue,
+      items: [
+        "Schema correctness",
+        "Data shape validation",
+        "Statistics monitoring",
+        "Data quality tests"
+      ]
+    },
+    {
+      title: "System Performance",
+      icon: "⚡",
+      color: colors.purple,
+      items: [
+        "Query metrics tracking",
+        "Resource usage monitoring",
+        "Cost management (FinOps)",
+        "Observability practices"
+      ]
+    }
+  ]}
+/>
+
+Monitor both data quality and system performance. Run data-quality tests continuously and implement observability to catch issues early.
 
 ### Data Architecture
 
-Build robust systems that can process and transform data without imploding. Your choices for ingestion and storage directly impact query and transformation performance. Understand trade-offs and ensure your architecture matches your workload.
+**In plain English:** Your architecture choices for storing and moving data directly affect how well queries and transformations work. If you stored data poorly, transformations will be slow and expensive. Good architecture makes transformations fast and cost-effective.
+
+**In technical terms:** Build robust systems that can process and transform data without imploding. Your choices for ingestion and storage directly impact query and transformation performance. Understand trade-offs and ensure your architecture matches your workload.
+
+**Key principles:**
+- Design for the workload (OLAP vs OLTP)
+- Understand distributed system characteristics
+- Plan for scalability and elasticity
+- Consider cost implications of architecture choices
 
 ### Orchestration
 
-Use orchestration to manage complex pipelines with dependency-based approaches rather than simple cron jobs. Orchestration is the glue that allows pipelines to span multiple systems.
+**In plain English:** Orchestration is like conducting an orchestra—it coordinates all the different transformation steps so they happen in the right order, at the right time, with the right dependencies. Without it, you're just hoping everything works out.
+
+**In technical terms:** Use orchestration to manage complex pipelines with dependency-based approaches rather than simple cron jobs. Orchestration is the glue that allows pipelines to span multiple systems and manage complex dependencies.
+
+**Why it matters:** Modern data pipelines are too complex for simple scheduling. Orchestration enables:
+- Dependency management
+- Error handling and retries
+- Multi-system coordination
+- Visibility into pipeline execution
 
 ### Software Engineering
 
-Know best practices for your tools (SQL, Python, Spark, etc.). Avoid anti-patterns like inefficient UDFs. Embrace analytics engineering tools like dbt. Understand what GUI tools generate under the hood. Write clean, performant code rather than just throwing more resources at problems.
+**In plain English:** Writing good data transformation code is a skill. Just like you wouldn't build a house without knowing carpentry, you shouldn't write transformation code without understanding best practices for SQL, Python, Spark, or whatever tools you're using.
 
-## Conclusion
+**In technical terms:** Know best practices for your tools (SQL, Python, Spark). Avoid anti-patterns like inefficient UDFs. Embrace analytics engineering tools like dbt. Understand what GUI tools generate under the hood. Write clean, performant code rather than throwing more resources at problems.
 
-Transformations sit at the heart of data pipelines. It's critical to keep in mind the purpose of transformations. Ultimately, engineers are not hired to play with the latest technological toys but to serve their customers. Transformations are where data adds value and ROI to the business.
+**Best practices:**
+- Follow idiomatic patterns for your tools
+- Filter early and often
+- Understand query optimization
+- Use appropriate abstractions
+- Write maintainable, readable code
+
+---
+
+## 7. Summary
+
+You've learned how to make data useful through queries, modeling, and transformations—the core capabilities that turn raw data into consumable analytics assets.
+
+### Key Takeaways
+
+1. **Queries are the interface to data** - Understanding how queries work, from parsing to optimization to execution, helps you write better queries and diagnose performance problems
+
+2. **Query optimization is critical** - Use explain plans, prune unnecessary scans, optimize joins, manage commits properly, vacuum dead records, and leverage caching
+
+3. **Streaming queries require different patterns** - Fast-follower approaches, Kappa architecture, windows, triggers, and stream joins enable real-time analytics
+
+4. **Data modeling creates structure** - Whether Kimball star schemas, Inmon normalized warehouses, Data Vault flexible structures, or wide denormalized tables, modeling imposes business logic on data
+
+5. **Normalization has trade-offs** - From denormalized (0NF) to third normal form (3NF), each level reduces redundancy but may increase query complexity
+
+6. **Streaming data modeling is evolving** - Traditional batch modeling doesn't translate well to streaming; flexible schemas and new paradigms are emerging
+
+7. **Transformations persist results** - Unlike queries that just retrieve data, transformations save results for downstream consumption, enabling scalability and reusability
+
+8. **Batch transformations are workhorses** - Distributed joins, ETL/ELT patterns, update strategies, and business logic rendering power most analytics workflows
+
+9. **Streaming transformations enable real-time** - Enrichment, stream-to-stream joins, streaming DAGs, and micro-batch vs true streaming support low-latency use cases
+
+10. **Undercurrents matter more at transformation** - Security, data management, DataOps, architecture, orchestration, and software engineering are critical at this stage
+
+> **Insight**
+>
+> Transformations sit at the heart of data pipelines. It's critical to keep in mind the purpose of transformations. Ultimately, engineers are not hired to play with the latest technological toys but to serve their customers. Transformations are where data adds value and ROI to the business.
 
 As we head into the serving stage of the data engineering lifecycle in Chapter 9, reflect on technology as a tool for realizing organizational goals. Think about how improvements in transformation systems could help you serve your end customers better and the kinds of business problems you're interested in solving with technology.
 
-## Additional Resources
+**Additional Resources:**
 
-- "Building a Real-Time Data Vault in Snowflake" by Dmytro Yaroshenko and Kent Graziano
-- Building a Scalable Data Warehouse with Data Vault 2.0 (Morgan Kaufmann) by Daniel Linstedt and Michael Olschimke
-- Building the Data Warehouse (Wiley), Corporate Information Factory, and The Unified Star Schema (Technics Publications) by W. H. (Bill) Inmon
-- "Caching in Snowflake Data Warehouse" Snowflake Community page
-- "Data Warehouse: The Choice of Inmon vs. Kimball" by Ian Abramson
-- The Data Warehouse Toolkit by Ralph Kimball and Margy Ross (Wiley)
-- "Data Vault—An Overview" by John Ryan
+Data Modeling:
+- *The Data Warehouse Toolkit* by Ralph Kimball and Margy Ross (Wiley)
+- *Building the Data Warehouse* by W. H. (Bill) Inmon (Wiley)
+- *Building a Scalable Data Warehouse with Data Vault 2.0* by Daniel Linstedt and Michael Olschimke (Morgan Kaufmann)
 - "Data Vault 2.0 Modeling Basics" by Kent Graziano
+- Kimball Group's dimensional modeling techniques
+
+Query Optimization:
 - "A Detailed Guide on SQL Query Optimization" tutorial by Megha
-- "Difference Between Kimball and Inmon" by manmeetjuneja5
-- "Eventual vs. Strong Consistency in Distributed Databases" by Saurabh.v
-- "The Evolution of the Corporate Information Factory" by Bill Inmon
+- "How a SQL Database Engine Works" by Dennis Pham
 - Google Cloud's "Using Cached Query Results" documentation
-- "How a SQL Database Engine Works," by Dennis Pham
+- "Caching in Snowflake Data Warehouse" community page
+
+General Resources:
 - "How Should Organizations Structure Their Data?" by Michael Berk
-- "Inmon or Kimball: Which Approach Is Suitable for Your Data Warehouse?" by Sansu George
-- "Introduction to Data Vault Modeling" document, compiled by Kent Graziano and Dan Linstedt
-- Kimball Group's "Four-Step Dimensional Design Process", "Conformed Dimensions", and "Dimensional Modeling Techniques" web pages
 - "Modeling of Real-Time Streaming Data?" Stack Exchange thread
-- Oracle's "Slowly Changing Dimensions" tutorial
 - "Streaming Event Modeling" by Paul Stanton
+- "Eventual vs. Strong Consistency in Distributed Databases" by Saurabh.v
 
 ---
 
